@@ -1,8 +1,8 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-19  
+**Last updated:** 2026-04-19 (7:40 PM)  
 **Current branch:** main  
-**Working on:** Repository initialization with Master Control governance
+**Working on:** Backend deployment and infrastructure setup
 
 ---
 
@@ -20,7 +20,13 @@ Initializing TIP Generator repository with Master Control (Cloudy-Work) governan
 - ✅ Configured SSH keys on CT190 and CT191 via Proxmox
 - ✅ Installed git, Python 3.10, pip, venv on both containers
 - ✅ Cloned repo to both containers at /opt/tip-generator
-- ⏳ Ready to commit all changes
+- ✅ Committed all Master Control and local repo changes
+- ✅ Created FastAPI backend skeleton with requirements.txt
+- ✅ Set up Python virtual environments on both containers
+- ✅ Installed all backend dependencies (FastAPI, python-docx, openpyxl, PyMuPDF, anthropic, etc.)
+- ✅ Created and started systemd services on both containers
+- ✅ Verified health endpoints working on both CT190 and CT191
+- ⏳ Ready for HAProxy and NPM configuration
 
 ### Recent completions
 - ✅ Master Control submodule initialized
@@ -31,15 +37,15 @@ Initializing TIP Generator repository with Master Control (Cloudy-Work) governan
 - ✅ APP-MAP.md updated with TIP Generator details
 
 ### Next steps
-1. Commit Master Control updates (SSH config, APP-MAP)
-2. Commit local repo initialization files
-3. Set up Python virtual environment on both containers
-4. Install backend dependencies (FastAPI, python-docx, openpyxl, PyMuPDF, etc.)
-5. Install frontend dependencies (React, Vite)
-6. Configure systemd services for FastAPI backend
-7. Set up Authentik OAuth configuration
-8. Configure HAProxy backend for TIP Generator
-9. Set up NPM proxy for https://tip.cloudigan.net
+1. Configure HAProxy backend for TIP Generator (add to HAProxy config)
+2. Set up NPM proxy for https://tip.cloudigan.net
+3. Create database and user on PostgreSQL (tip_generator database)
+4. Set up Authentik OAuth application
+5. Create .env files on both containers with credentials
+6. Install frontend dependencies (React, Vite, Node.js)
+7. Build and configure frontend
+8. Test end-to-end connectivity through HAProxy VIP
+9. Verify blue-green switching works
 
 ---
 
@@ -50,17 +56,12 @@ None - fresh repository initialization
 
 ## Exact Next Command
 ```bash
-# Commit Master Control updates
-cd .cloudy-work
-git add ssh_config_master.conf _cloudy-ops/context/APP-MAP.md
-git commit -m "feat: add TIP Generator infrastructure (CT190/CT191)"
-git push origin main
+# Verify both backends are running
+curl http://10.92.3.90:8000/health  # CT190 (blue)
+curl http://10.92.3.91:8000/health  # CT191 (green)
 
-# Commit local repo initialization
-cd ..
-git add .windsurf BOOT.md DECISIONS.md TASK-STATE.md PLAN.md
-git commit -m "chore: initialize Master Control governance and workflows"
-git push origin main
+# Next: Configure HAProxy backend
+ssh haproxy 'cat /etc/haproxy/haproxy.cfg | grep -A 10 "backend.*tip"'
 ```
 
 ---
