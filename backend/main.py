@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import Base, engine, get_db
 import models  # Import models to register them with Base
-from routers import upload_router
+from routers import upload_router, generate_router
 import os
 
 # Create database tables
@@ -22,6 +22,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(upload_router)
+app.include_router(generate_router)
 
 @app.on_event("startup")
 async def startup_event():
