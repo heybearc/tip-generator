@@ -435,84 +435,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     else:
         doc = DocxDocument()
 
-    # Page margins
-    for sec in doc.sections:
-        sec.top_margin = Inches(1)
-        sec.bottom_margin = Inches(1)
-        sec.left_margin = Inches(1.25)
-        sec.right_margin = Inches(1.25)
-
-    # --- Header: Thrive logo left, doc title right ---
-    logo_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'thrive_logo.jpg')
-    logo_path = os.path.normpath(logo_path)
-    for sec in doc.sections:
-        hdr = sec.header
-        hdr.is_linked_to_previous = False
-        hdr_para = hdr.paragraphs[0] if hdr.paragraphs else hdr.add_paragraph()
-        hdr_para.clear()
-        from docx.oxml import OxmlElement as OE
-        from docx.oxml.ns import qn as QN
-        # Tab stop for right-aligned title
-        pPr = hdr_para._p.get_or_add_pPr()
-        tabs = OE('w:tabs')
-        tab = OE('w:tab')
-        tab.set(QN('w:val'), 'right')
-        tab.set(QN('w:pos'), '9360')  # 6.5 inches in twips
-        tabs.append(tab)
-        pPr.append(tabs)
-        # Logo run
-        if os.path.exists(logo_path):
-            logo_run = hdr_para.add_run()
-            logo_run.add_picture(logo_path, height=Inches(0.35))
-        # Tab + title
-        title_run = hdr_para.add_run(f'\t{draft.title}')
-        title_run.font.size = Pt(9)
-        title_run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
-        # Bottom border on header
-        pBdr = OE('w:pBdr')
-        btm = OE('w:bottom')
-        btm.set(QN('w:val'), 'single')
-        btm.set(QN('w:sz'), '4')
-        btm.set(QN('w:color'), '143F6A')
-        pBdr.append(btm)
-        pPr.append(pBdr)
-
-    # --- Footer: left text + right page number ---
-    for sec in doc.sections:
-        ftr = sec.footer
-        ftr.is_linked_to_previous = False
-        ftr_para = ftr.paragraphs[0] if ftr.paragraphs else ftr.add_paragraph()
-        ftr_para.clear()
-        pPr2 = ftr_para._p.get_or_add_pPr()
-        tabs2 = OE('w:tabs')
-        tab2 = OE('w:tab')
-        tab2.set(QN('w:val'), 'right')
-        tab2.set(QN('w:pos'), '9360')
-        tabs2.append(tab2)
-        pPr2.append(tabs2)
-        left_run = ftr_para.add_run('Thrive Networks — Confidential')
-        left_run.font.size = Pt(8)
-        left_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
-        # Tab then page field
-        tab_run = ftr_para.add_run('\tPage ')
-        tab_run.font.size = Pt(8)
-        tab_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
-        # PAGE field
-        fld_begin = OE('w:fldChar')
-        fld_begin.set(QN('w:fldCharType'), 'begin')
-        r_pg = OE('w:r')
-        r_pg.append(fld_begin)
-        ftr_para._p.append(r_pg)
-        instr = OE('w:r')
-        instr_txt = OE('w:instrText')
-        instr_txt.text = ' PAGE \\* MERGEFORMAT '
-        instr.append(instr_txt)
-        ftr_para._p.append(instr)
-        fld_end = OE('w:fldChar')
-        fld_end.set(QN('w:fldCharType'), 'end')
-        r_end = OE('w:r')
-        r_end.append(fld_end)
-        ftr_para._p.append(r_end)
+    # Header and footer are inherited directly from the template — do not modify them.
 
     def add_inline_runs(para, text: str, base_size=None):
         """Parse inline **bold**, *italic*, `code` and add runs to para."""
@@ -576,20 +499,6 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         pPr.append(pBdr)
         return p
 
-    # Cover / title block
-    title_para = doc.add_paragraph()
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title_para.add_run(draft.title)
-    run.font.size = Pt(22)
-    run.font.bold = True
-    run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
-    sub_para = doc.add_paragraph()
-    sub_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    sub_run = sub_para.add_run('Technical Implementation Plan')
-    sub_run.font.size = Pt(12)
-    sub_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
-    doc.add_paragraph()
-
     def flush_table(tbl_lines):
         rows = [l for l in tbl_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
         if not rows:
@@ -615,8 +524,22 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
                 else:
                     cell_para.paragraph_format.space_after = Pt(2)
 
-    # Strip [INSTRUCTION: ...] lines (single or multi-line)
-    content = re.sub(r'\[INSTRUCTION:[^\]]*\]', '', draft.content, flags=re.DOTALL)
+    # Strip [INSTRUCTION: ...] blocks (may span multiple lines)
+    content = re.sub(r'\[INSTRUCTION:.*?\]', '', draft.content, flags=re.DOTALL)
+    # Strip Document Control Notice block (> blockquote lines at top)
+    content = re.sub(
+        r'(?:^> .*\n)+',
+        '',
+        content,
+        flags=re.MULTILINE
+    )
+    # Also strip any standalone DOCUMENT CONTROL NOTICE heading/paragraph
+    content = re.sub(
+        r'^\*{0,2}DOCUMENT CONTROL NOTICE\*{0,2}\n(?:.*\n)*?(?=\n#|\n\n#)',
+        '',
+        content,
+        flags=re.MULTILINE
+    )
     # Collapse runs of 3+ blank lines to 2
     content = re.sub(r'\n{3,}', '\n\n', content)
 
