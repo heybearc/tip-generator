@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react'
@@ -21,12 +21,30 @@ export default function DraftsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { loadDrafts() }, [])
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    loadDrafts()
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
 
   const loadDrafts = async () => {
     try {
       const res = await axios.get(`${API_URL}/generate/drafts`)
-      setDrafts(res.data)
+      const data: Draft[] = res.data
+      setDrafts(data)
+      const hasGenerating = data.some(d => d.status === 'generating')
+      if (hasGenerating && !pollRef.current) {
+        pollRef.current = setInterval(async () => {
+          const r = await axios.get(`${API_URL}/generate/drafts`)
+          const updated: Draft[] = r.data
+          setDrafts(updated)
+          if (!updated.some(d => d.status === 'generating')) {
+            clearInterval(pollRef.current!)
+            pollRef.current = null
+          }
+        }, 5000)
+      }
     } catch {
       setError('Failed to load drafts')
     } finally {
