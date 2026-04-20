@@ -90,3 +90,4 @@ Thumbs.db
 # Windsurf IDE
 .windsurf/
 *-remote.code-workspace
+CREDENTIALS.md
