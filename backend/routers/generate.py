@@ -3,10 +3,12 @@ TIP generation API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+import json
 from database import get_db
 from models.draft import Draft, DraftStatus
 from models.document import Document
+from models.template_file import TemplateFile
 from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, GenerateTIPResponse
 from services.claude import ClaudeService
 
@@ -92,6 +94,18 @@ async def generate_tip(
             Document.id == draft.service_order_document_id
         ).first()
     
+    # Load active template structure
+    template_structure: Optional[dict] = None
+    active_template = db.query(TemplateFile)\
+        .filter(TemplateFile.is_active == True)\
+        .first()
+
+    if active_template and active_template.template_structure:
+        try:
+            template_structure = json.loads(active_template.template_structure)
+        except Exception:
+            pass  # Fall through to generic prompt if structure is malformed
+
     # Generate TIP
     try:
         claude_service = get_claude_service()
@@ -99,9 +113,15 @@ async def generate_tip(
             draft=draft,
             discovery_doc=discovery_doc,
             service_order_doc=service_order_doc,
-            db=db
+            db=db,
+            template_structure=template_structure
         )
-        
+
+        # Record which template was used
+        if active_template:
+            updated_draft.template_file_id = active_template.id
+            db.commit()
+
         return GenerateTIPResponse(
             message="TIP generated successfully",
             draft_id=updated_draft.id,

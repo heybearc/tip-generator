@@ -20,6 +20,7 @@ class Draft(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
+    template_file_id = Column(Integer, ForeignKey("template_files.id"), nullable=True)  # Links to actual .docx template used
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     status = Column(Enum(DraftStatus), default=DraftStatus.DRAFT)

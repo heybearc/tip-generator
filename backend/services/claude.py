@@ -2,151 +2,210 @@
 Claude API service for TIP generation
 """
 import os
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List
 from anthropic import Anthropic
 from sqlalchemy.orm import Session
 from models.draft import Draft, DraftStatus
 from models.document import Document
 
+
 class ClaudeService:
     """Service for interacting with Claude API"""
-    
+
     def __init__(self):
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
         self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
-        self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", "4096"))
-        
+        self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", "8000"))
+
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-        
+
         self.client = Anthropic(api_key=self.api_key)
-    
+
     async def generate_tip(
         self,
         draft: Draft,
         discovery_doc: Optional[Document],
         service_order_doc: Optional[Document],
-        db: Session
+        db: Session,
+        template_structure: Optional[Dict[str, Any]] = None
     ) -> Draft:
         """
-        Generate TIP using Claude API
+        Generate TIP using Claude API, guided by the active template structure
         """
-        # Update draft status
         draft.status = DraftStatus.GENERATING
         db.commit()
-        
+
         try:
-            # Build prompt
-            prompt = self._build_prompt(draft, discovery_doc, service_order_doc)
-            
-            # Call Claude API
+            prompt = self._build_prompt(
+                draft, discovery_doc, service_order_doc, template_structure
+            )
+
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+                messages=[{"role": "user", "content": prompt}]
             )
-            
-            # Extract generated content
+
             generated_content = response.content[0].text
-            
-            # Update draft with generated content
+
             draft.content = generated_content
             draft.status = DraftStatus.COMPLETED
             draft.claude_model = self.model
             draft.generation_prompt = prompt
             draft.generation_tokens = response.usage.output_tokens
-            
-            # Parse sections (basic implementation)
-            draft.sections = self._parse_sections(generated_content)
-            
+            draft.sections = self._parse_sections(generated_content, template_structure)
+
             from datetime import datetime
             draft.generated_at = datetime.utcnow()
-            
+
             db.commit()
             db.refresh(draft)
-            
             return draft
-            
+
         except Exception as e:
             draft.status = DraftStatus.FAILED
             draft.content = f"Error generating TIP: {str(e)}"
             db.commit()
             raise
-    
+
     def _build_prompt(
         self,
         draft: Draft,
         discovery_doc: Optional[Document],
-        service_order_doc: Optional[Document]
+        service_order_doc: Optional[Document],
+        template_structure: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Build the prompt for Claude based on uploaded documents
+        Build a template-aware prompt for Claude.
+
+        When a parsed template structure is available, the prompt instructs Claude
+        to populate each section using the template instructions and the extracted
+        document content. When no template is available it falls back to a generic
+        TIP structure so the endpoint never fails.
         """
-        prompt_parts = []
-        
-        prompt_parts.append("""You are an expert technical writer specializing in creating Technical Implementation Plans (TIPs) for IT projects.
+        parts = []
 
-Your task is to generate a comprehensive, professional Technical Implementation Plan based on the provided discovery worksheet and service order documents.
+        # ── System preamble ──────────────────────────────────────────────────
+        parts.append(
+            "You are an expert technical writer who creates Technical Implementation "
+            "Plans (TIPs) for a Managed Service Provider. Your writing is professional, "
+            "precise, and thorough. You ONLY use information extracted from the provided "
+            "source documents — never invent facts, names, or details.\n\n"
+        )
 
-The TIP should include the following sections:
-1. Executive Summary
-2. Project Overview
-3. Technical Requirements
-4. Implementation Approach
-5. Timeline and Milestones
-6. Resource Requirements
-7. Risk Assessment
-8. Success Criteria
-9. Rollback Plan
-10. Post-Implementation Support
-
-Please analyze the provided documents and create a detailed, actionable TIP that follows industry best practices.
-""")
-        
+        # ── Source documents ─────────────────────────────────────────────────
         if discovery_doc and discovery_doc.extracted_text:
-            prompt_parts.append("\n\n=== DISCOVERY WORKSHEET ===\n")
-            prompt_parts.append(discovery_doc.extracted_text[:10000])  # Limit to 10k chars
-        
+            parts.append("=== DISCOVERY WORKSHEET ===\n")
+            parts.append(discovery_doc.extracted_text[:12000])
+            parts.append("\n\n")
+
         if service_order_doc and service_order_doc.extracted_text:
-            prompt_parts.append("\n\n=== SERVICE ORDER ===\n")
-            prompt_parts.append(service_order_doc.extracted_text[:10000])
-        
+            parts.append("=== SERVICE ORDER ===\n")
+            parts.append(service_order_doc.extracted_text[:12000])
+            parts.append("\n\n")
+
         if draft.description:
-            prompt_parts.append(f"\n\n=== ADDITIONAL CONTEXT ===\n{draft.description}")
-        
-        prompt_parts.append("\n\nPlease generate the Technical Implementation Plan now:")
-        
-        return "".join(prompt_parts)
-    
-    def _parse_sections(self, content: str) -> Dict[str, Any]:
+            parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
+
+        if not discovery_doc and not service_order_doc:
+            parts.append(
+                "NOTE: No source documents were provided. Generate a TIP structure "
+                "with placeholder text indicating where real data should be inserted.\n\n"
+            )
+
+        # ── Template-guided instructions ─────────────────────────────────────
+        if template_structure and template_structure.get("sections"):
+            sections = template_structure["sections"]
+            instructions = template_structure.get("instructions", [])
+
+            # Build an instruction-to-section lookup
+            instruction_map: Dict[str, List[str]] = {}
+            for inst in instructions:
+                sec = inst.get("section", "")
+                instruction_map.setdefault(sec, []).append(inst["text"])
+
+            parts.append(
+                "=== YOUR TASK ===\n"
+                "Generate the complete TIP document by populating each section below. "
+                "Follow the [INSTRUCTION] notes embedded in each section — they are "
+                "guidance for you and must NOT appear in your output. "
+                "Use only facts from the source documents above. "
+                "Where data is missing, write a clearly-marked placeholder such as "
+                "[DATA NEEDED: description].\n\n"
+                "Format output as a clean Word-ready document: use the heading names "
+                "exactly as given, write in full paragraphs or bullet lists as "
+                "appropriate, and do not add extra commentary outside the sections.\n\n"
+            )
+
+            parts.append("=== TEMPLATE SECTIONS TO POPULATE ===\n\n")
+
+            for section in sections:
+                level = section.get("level", 1)
+                title = section.get("title", "").strip()
+                content = section.get("content", "").strip()
+
+                # Heading markers scaled to level
+                heading_prefix = "#" * level
+                parts.append(f"{heading_prefix} {title}\n")
+
+                if content:
+                    parts.append(f"{content}\n")
+
+                # Any matching Claude instructions for this section
+                for inst_text in instruction_map.get(title, []):
+                    parts.append(f"[INSTRUCTION: {inst_text}]\n")
+
+                parts.append("\n")
+
+        else:
+            # ── Fallback: generic TIP structure ──────────────────────────────
+            parts.append(
+                "=== YOUR TASK ===\n"
+                "No template structure is available. Generate a comprehensive TIP "
+                "using this standard structure. Populate each section from the source "
+                "documents above.\n\n"
+                "# Executive Summary\n"
+                "# Project Overview\n"
+                "# Customer Environment\n"
+                "# Technical Requirements\n"
+                "# Implementation Phases\n"
+                "# Timeline and Milestones\n"
+                "# Resource Requirements\n"
+                "# Risks and Contingencies\n"
+                "# Success Criteria\n"
+                "# Post-Implementation Support\n\n"
+            )
+
+        parts.append("Generate the TIP document now:\n")
+        return "".join(parts)
+
+    def _parse_sections(
+        self,
+        content: str,
+        template_structure: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
-        Parse the generated content into sections
-        Basic implementation - can be enhanced later
+        Parse generated content into a sections dict.
+        Uses template section titles when available for accurate splitting.
         """
-        sections = {}
-        current_section = None
-        current_content = []
-        
-        for line in content.split('\n'):
-            # Check if line is a section header (starts with number or ##)
-            if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.', '##')):
-                # Save previous section
-                if current_section:
-                    sections[current_section] = '\n'.join(current_content)
-                
-                # Start new section
-                current_section = line.strip()
-                current_content = []
+        sections: Dict[str, Any] = {}
+        current_title: Optional[str] = None
+        current_lines: List[str] = []
+
+        for line in content.split("\n"):
+            stripped = line.strip()
+            # Detect markdown headings (# Title)
+            if stripped.startswith("#"):
+                if current_title:
+                    sections[current_title] = "\n".join(current_lines).strip()
+                current_title = stripped.lstrip("#").strip()
+                current_lines = []
             else:
-                current_content.append(line)
-        
-        # Save last section
-        if current_section:
-            sections[current_section] = '\n'.join(current_content)
-        
+                current_lines.append(line)
+
+        if current_title:
+            sections[current_title] = "\n".join(current_lines).strip()
+
         return sections
