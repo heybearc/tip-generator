@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-20  
-**Current phase:** Active refinement — template-guided editing, export polish  
-**Status:** Phases 1.1–1.6 complete; working on document quality and auth
+**Current phase:** Active refinement — export quality, generation prompt discipline  
+**Status:** Phases 1.1–1.6 complete; 1.7 and Authentication next
 
 ---
 
@@ -13,16 +13,11 @@
 
 ---
 
-## Current Phase: End-to-End Testing
+## Current Phase: Export Quality + Generation Discipline
 
 ### Active Work (IN PROGRESS)
-**Phase 1 Testing** — First real end-to-end run with real documents
-- ⏳ Upload Excel discovery workbook + PDF service order
-- ⏳ Verify Excel extraction quality via `/api/documents/{id}/extracted-text`
-- ⏳ Generate TIP — confirm single-pass vs chunked mode selected correctly
-- ⏳ Review generated content in DraftViewPage
-- ⏳ Test AI Assist panel (refine with Claude)
-- ⏳ Test Edit + Save flow
+- ⏳ Generation progress UX (Phase 1.7)
+- ⏳ Authentication (Authentik OAuth2/OIDC)
 
 ---
 
@@ -32,6 +27,7 @@
 - ✅ Blue-green containers (CT190 @ 10.92.3.91, CT191 @ 10.92.3.92)
 - ✅ HAProxy + NPM + SSL, shared PostgreSQL + NFS
 - ✅ FastAPI backend + React/Vite frontend deployed
+- ✅ tip-generator registered in blue-green MCP server
 
 **Phase 1.2: Document & Template Management** ✅
 - ✅ Document upload (Excel, PDF, Word), drag & drop UI
@@ -61,23 +57,31 @@
 - ✅ HomePage — live stats (doc count, draft count, active template)
 - ✅ DB migration: `template_file_id` on drafts table
 
+**Phase 1.6: TIP Export** ✅
+- ✅ Word (.docx) export — loads Thrive template, inherits header/footer/styles
+- ✅ Proper Word Heading 1/2/3 styles (all-caps, #143F6A, Calibri) from template
+- ✅ Real Word XML bullet lists (abstractNum/numPr) via List Paragraph style
+- ✅ Numbered lists with proper hanging indent
+- ✅ 4-column risk tables with teal header row
+- ✅ `[INSTRUCTION: ...]` blocks stripped on export
+- ✅ Document Control Notice and Service Order callout stripped on export
+- ✅ Bullet spacing (space before/after) for readability
+- ✅ Export formatting lessons saved to Cascade memory
+
+**Phase 1.6+: Generation Prompt Discipline** ✅
+- ✅ No Risk Register section (not in template)
+- ✅ No Service Order callout block in generated output
+- ✅ Implementation Details: numbered steps/bullets; Option A/B only when genuinely multiple approaches exist
+- ✅ All table section formats enforced (Risks 4-col, Acceptance Criteria 3-col, Deliverables 4-col)
+- ✅ Appendix A = N/A for project TIPs; Appendix B = risk reference
+- ✅ DB instruction override for Implementation Details matches template instruction exactly
+- ✅ Post-generation restructure tooling built (collapse Risk/Test blocks, Step sub-headings → numbered lists)
+
 ---
 
 ## Upcoming Phases
 
-### Phase 1.6: TIP Export (NEXT)
-**Objective:** Export generated TIP as Word document and PDF
-
-**Tasks:**
-- Word (.docx) export — populate original template file with generated content using python-docx
-- PDF export — convert docx to PDF (via LibreOffice headless or WeasyPrint)
-- Download endpoint: GET /api/drafts/{id}/export?format=docx|pdf
-- Export button on DraftViewPage (currently wired but no-op)
-- Preserve heading styles from original template
-
-**Development:** Blue container (CT190) only
-
-### Phase 1.7: Generation Progress UX
+### Phase 1.7: Generation Progress UX (NEXT)
 **Objective:** Better feedback during long-running chunked generation
 
 **Tasks:**
@@ -86,20 +90,29 @@
 - Estimated time remaining
 - Cancel generation mid-run
 
+**Development:** Blue container (CT190) only
+
+### Phase 1.8: Authentication
+**Objective:** Authentik OAuth2/OIDC, protected routes, user sessions
+
+**Notes:**
+- ⚠️ Revision History author name currently hardcoded to `"TIP Generator Admin"` — will resolve automatically once real user records exist in DB post-auth
+
 ---
 
 ## Prioritized Backlog
 
 ### High Priority
 - **Generation progress UX** (Phase 1.7) — chunked runs take 2-4 min with no feedback
-- **Word/PDF export** (Phase 1.6) — core deliverable
-- **Authentication** — Authentik OAuth2/OIDC, protected routes, user sessions
-  - ⚠️ **Revision History author name** currently hardcoded to `full_name` of DB user ID 1 (`"TIP Generator Admin"`). Once auth is wired, `author_name` will pull from the logged-in user automatically — no code change needed, just real user records in the DB.
+- **Authentication** (Phase 1.8) — Authentik OAuth2/OIDC, protected routes, user sessions
+- **PDF export** — convert docx to PDF (LibreOffice headless or WeasyPrint)
 - **Excel parser tuning** — validate against real discovery workbooks, handle edge cases (merged cells, dropdowns, nested tables)
 
 ### Medium Priority
 - **Draft management** — delete drafts, rename, duplicate
 - **Generation history** — track which documents/template version produced each draft
+- **BYOK Claude API key** — user profile field for personal Claude API key; generation uses it if set, falls back to system key
+- **Admin dashboard** — user management UI, usage/cost stats, API key status per user
 - **Template Claude instructions** — add `[CLAUDE: ...]` markers to actual template .docx and verify they're picked up
 - **Prompt quality iteration** — review first real TIP output and refine prompts
 - **Gap/suggestion report** — explicit section listing all `[DATA NEEDED:]` placeholders found in the generated TIP
@@ -118,10 +131,12 @@
 - Chunked generation has no UI progress feedback (Phase 1.7)
 - AI Assist was silently timing out (sync Claude call blocking async event loop) — **fixed 2026-04-20** via ThreadPoolExecutor
 - Revision History was pulling date from discovery doc instead of server date — **fixed 2026-04-20** (deterministic post-process on generation + refine)
-- **Revision History author** shows `"TIP Generator Admin"` until real auth is implemented — blocked on Authentication phase
+- **Revision History author** shows `"TIP Generator Admin"` until real auth is implemented — blocked on Phase 1.8
 - Excel merged cells not handled (openpyxl `data_only=True` limitation)
 - SSH host key churn on CT190/CT191 after Proxmox maintenance — auto-handled by SSH config now
-- TIP Generator not yet registered in MCP server — tracked in PROMOTE-TO-CONTROL-PLANE.md
+- ~~TIP Generator not yet registered in MCP server~~ — **resolved 2026-04-20**
+- Generated docs may still contain `[DATA NEEDED: ...]` placeholders — expected, requires human review before delivery
+- PDF export not yet implemented — docx only for now
 
 ---
 
@@ -132,18 +147,24 @@
 - ✅ Template parsing and display
 - ✅ TIP generation engine (template-aware, chunked)
 - ✅ Draft review + AI-assisted editing
-- ⏳ Word/PDF export (1.6)
+- ✅ Word export — template-faithful, proper heading styles, bullets, tables (1.6)
+- ✅ Generation prompt discipline — no hallucinated structure, correct table formats (1.6+)
 - ⏳ Generation progress UX (1.7)
-- ⏳ Authentication (Authentik OAuth2/OIDC)
+- ⏳ Authentication — Authentik OAuth2/OIDC (1.8)
+- ⏳ PDF export
 
-### Phase 2: Multi-User (Future)
-- User management, role-based permissions
-- Template library management
-- Draft sharing and collaboration
-- Audit logging
+### Phase 2: Admin & Multi-User (Future)
+- **User management** — create/edit/deactivate users, role-based permissions (Admin, Editor, Viewer)
+- **User profile settings** — display name, email, preferences
+- **BYOK (Bring Your Own Key)** — each user can store their own Claude API key in their profile; generation uses the logged-in user's key, falling back to the system key if none set
+- **Template library management** — multiple named templates, select per generation
+- **Draft sharing and collaboration** — share drafts between users
+- **Audit logging** — who generated/edited/exported what and when
+- **Admin dashboard** — user list, usage stats, API key status per user
 
 ### Phase 3: Advanced Features (Future)
 - AI-powered template suggestions
 - Batch processing
-- Advanced analytics and reporting
+- Advanced analytics and reporting (token usage, cost per generation, estimated cost with BYOK keys)
 - Template version control
+- Gap/suggestion report — auto-list all `[DATA NEEDED:]` placeholders in a generated TIP
