@@ -203,12 +203,12 @@ export default function TemplateManagementPage() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => loadTemplateStructure(currentTemplate.id)}
+                  onClick={() => showStructure ? setShowStructure(false) : loadTemplateStructure(currentTemplate.id)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                   disabled={loadingStructure}
                 >
                   {showStructure ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                  {loadingStructure ? 'Loading...' : 'View Structure'}
+                  {loadingStructure ? 'Loading...' : showStructure ? 'Hide Structure' : 'View Structure'}
                 </button>
                 <button
                   onClick={() => handleDownload(currentTemplate.id)}
