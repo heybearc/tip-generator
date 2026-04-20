@@ -11,8 +11,25 @@ interface Draft {
   status: string
   claude_model: string | null
   generation_tokens: number | null
+  generation_prompt: string | null
   created_at: string
   generated_at: string | null
+}
+
+interface ChunkProgress {
+  mode: string
+  chunk: number
+  total_chunks: number
+  sections: number
+}
+
+function parseProgress(generation_prompt: string | null): ChunkProgress | null {
+  if (!generation_prompt) return null
+  try {
+    const p = JSON.parse(generation_prompt)
+    if (p.mode === 'chunked') return p
+  } catch { /* not JSON */ }
+  return null
 }
 
 export default function DraftsPage() {
@@ -124,14 +141,33 @@ export default function DraftsPage() {
               onClick={() => navigate(`/drafts/${draft.id}`)}
               className="bg-white border rounded-xl p-4 flex items-center justify-between hover:border-blue-300 hover:shadow-sm cursor-pointer transition-all"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
                 {statusIcon(draft.status)}
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-900">{draft.title}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {new Date(draft.created_at).toLocaleString()}
                     {draft.generation_tokens && ` · ${draft.generation_tokens.toLocaleString()} tokens`}
                   </div>
+                  {draft.status === 'generating' && (() => {
+                    const p = parseProgress(draft.generation_prompt)
+                    if (!p) return null
+                    const pct = p.total_chunks > 0 ? Math.round((p.chunk / p.total_chunks) * 100) : 0
+                    return (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-xs text-blue-600 mb-1">
+                          <span>Generating section {p.chunk} of {p.total_chunks}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div className="w-full bg-blue-100 rounded-full h-1.5">
+                          <div
+                            className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
               <div className="flex items-center gap-2">

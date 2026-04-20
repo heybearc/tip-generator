@@ -67,13 +67,15 @@ class ClaudeService:
             if use_chunked:
                 sections_count = len(template_structure.get("sections", []))
                 chunks_count = (sections_count + SECTION_CHUNK_SIZE - 1) // SECTION_CHUNK_SIZE
-                draft.generation_prompt = (
-                    f"[CHUNKED MODE: {doc_size} chars, {sections_count} sections, "
-                    f"{chunks_count} Claude calls]"
-                )
+                draft.generation_prompt = json.dumps({
+                    "mode": "chunked",
+                    "chunk": 0,
+                    "total_chunks": chunks_count,
+                    "sections": sections_count,
+                })
                 db.commit()
                 generated_content, total_tokens = await self._generate_chunked(
-                    draft, discovery_doc, service_order_doc, template_structure
+                    draft, discovery_doc, service_order_doc, template_structure, db
                 )
             else:
                 prompt = self._build_prompt(
@@ -113,13 +115,15 @@ class ClaudeService:
         draft: Draft,
         discovery_doc: Optional[Document],
         service_order_doc: Optional[Document],
-        template_structure: Dict[str, Any]
+        template_structure: Dict[str, Any],
+        db: Optional[Session] = None
     ) -> tuple:
         """
         Generate TIP section by section when documents are large.
         Splits template sections into chunks of SECTION_CHUNK_SIZE and calls
         Claude once per chunk, passing the full document text each time but
         asking only for a subset of sections. Assembles results into one document.
+        Writes chunk progress to draft.generation_prompt after each call.
         """
         sections = template_structure.get("sections", [])
         instructions = template_structure.get("instructions", [])
@@ -139,11 +143,22 @@ class ClaudeService:
             sections[i:i + SECTION_CHUNK_SIZE]
             for i in range(0, len(sections), SECTION_CHUNK_SIZE)
         ]
+        total_chunks = len(chunks)
 
         all_content_parts: List[str] = []
         total_tokens = 0
 
         for chunk_idx, chunk in enumerate(chunks):
+            # Write progress before each call so the UI can show it
+            if db:
+                draft.generation_prompt = json.dumps({
+                    "mode": "chunked",
+                    "chunk": chunk_idx + 1,
+                    "total_chunks": total_chunks,
+                    "sections": len(sections),
+                })
+                db.commit()
+
             prompt = self._build_chunk_prompt(
                 draft=draft,
                 discovery_text=discovery_text,
@@ -151,7 +166,7 @@ class ClaudeService:
                 sections_chunk=chunk,
                 instruction_map=instruction_map,
                 chunk_index=chunk_idx,
-                total_chunks=len(chunks)
+                total_chunks=total_chunks
             )
 
             response = self.client.messages.create(
