@@ -11,10 +11,13 @@ from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, Genera
 from services.claude import ClaudeService
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
-claude_service = ClaudeService()
 
 # Temporary: hardcoded user_id until we implement auth
 TEMP_USER_ID = 1
+
+def get_claude_service():
+    """Get Claude service instance"""
+    return ClaudeService()
 
 @router.post("/draft", response_model=DraftResponse)
 async def create_draft(
@@ -91,6 +94,7 @@ async def generate_tip(
     
     # Generate TIP
     try:
+        claude_service = get_claude_service()
         updated_draft = await claude_service.generate_tip(
             draft=draft,
             discovery_doc=discovery_doc,
