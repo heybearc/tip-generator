@@ -6,6 +6,7 @@ import DraftsPage from './pages/DraftsPage'
 import DraftViewPage from './pages/DraftViewPage'
 import TemplateManagementPage from './pages/TemplateManagementPage'
 import DocumentsPage from './pages/DocumentsPage'
+import GeneratePage from './pages/GeneratePage'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/upload" element={<UploadPage />} />
+        <Route path="/generate" element={<GeneratePage />} />
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/drafts" element={<DraftsPage />} />
         <Route path="/drafts/:id" element={<DraftViewPage />} />
