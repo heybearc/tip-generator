@@ -216,14 +216,118 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     if not draft.content:
         raise HTTPException(status_code=400, detail="Draft has no content to export")
 
+    import os
+
     doc = DocxDocument()
 
     # Page margins
-    for section in doc.sections:
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1.25)
-        section.right_margin = Inches(1.25)
+    for sec in doc.sections:
+        sec.top_margin = Inches(1)
+        sec.bottom_margin = Inches(1)
+        sec.left_margin = Inches(1.25)
+        sec.right_margin = Inches(1.25)
+
+    # --- Header: Thrive logo left, doc title right ---
+    logo_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'thrive_logo.jpg')
+    logo_path = os.path.normpath(logo_path)
+    for sec in doc.sections:
+        hdr = sec.header
+        hdr.is_linked_to_previous = False
+        hdr_para = hdr.paragraphs[0] if hdr.paragraphs else hdr.add_paragraph()
+        hdr_para.clear()
+        from docx.oxml import OxmlElement as OE
+        from docx.oxml.ns import qn as QN
+        # Tab stop for right-aligned title
+        pPr = hdr_para._p.get_or_add_pPr()
+        tabs = OE('w:tabs')
+        tab = OE('w:tab')
+        tab.set(QN('w:val'), 'right')
+        tab.set(QN('w:pos'), '9360')  # 6.5 inches in twips
+        tabs.append(tab)
+        pPr.append(tabs)
+        # Logo run
+        if os.path.exists(logo_path):
+            logo_run = hdr_para.add_run()
+            logo_run.add_picture(logo_path, height=Inches(0.35))
+        # Tab + title
+        title_run = hdr_para.add_run(f'\t{draft.title}')
+        title_run.font.size = Pt(9)
+        title_run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
+        # Bottom border on header
+        pBdr = OE('w:pBdr')
+        btm = OE('w:bottom')
+        btm.set(QN('w:val'), 'single')
+        btm.set(QN('w:sz'), '4')
+        btm.set(QN('w:color'), '143F6A')
+        pBdr.append(btm)
+        pPr.append(pBdr)
+
+    # --- Footer: left text + right page number ---
+    for sec in doc.sections:
+        ftr = sec.footer
+        ftr.is_linked_to_previous = False
+        ftr_para = ftr.paragraphs[0] if ftr.paragraphs else ftr.add_paragraph()
+        ftr_para.clear()
+        pPr2 = ftr_para._p.get_or_add_pPr()
+        tabs2 = OE('w:tabs')
+        tab2 = OE('w:tab')
+        tab2.set(QN('w:val'), 'right')
+        tab2.set(QN('w:pos'), '9360')
+        tabs2.append(tab2)
+        pPr2.append(tabs2)
+        left_run = ftr_para.add_run('Thrive Networks — Confidential')
+        left_run.font.size = Pt(8)
+        left_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
+        # Tab then page field
+        tab_run = ftr_para.add_run('\tPage ')
+        tab_run.font.size = Pt(8)
+        tab_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
+        # PAGE field
+        fld_begin = OE('w:fldChar')
+        fld_begin.set(QN('w:fldCharType'), 'begin')
+        r_pg = OE('w:r')
+        r_pg.append(fld_begin)
+        ftr_para._p.append(r_pg)
+        instr = OE('w:r')
+        instr_txt = OE('w:instrText')
+        instr_txt.text = ' PAGE \\* MERGEFORMAT '
+        instr.append(instr_txt)
+        ftr_para._p.append(instr)
+        fld_end = OE('w:fldChar')
+        fld_end.set(QN('w:fldCharType'), 'end')
+        r_end = OE('w:r')
+        r_end.append(fld_end)
+        ftr_para._p.append(r_end)
+
+    def add_inline_runs(para, text: str, base_size=None):
+        """Parse inline **bold**, *italic*, `code` and add runs to para."""
+        parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)', text)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**') and len(part) > 4:
+                r = para.add_run(part[2:-2])
+                r.font.bold = True
+                if base_size: r.font.size = base_size
+            elif part.startswith('*') and part.endswith('*') and len(part) > 2:
+                r = para.add_run(part[1:-1])
+                r.font.italic = True
+                if base_size: r.font.size = base_size
+            elif part.startswith('`') and part.endswith('`') and len(part) > 2:
+                r = para.add_run(part[1:-1])
+                r.font.name = 'Courier New'
+                r.font.size = Pt(9)
+            else:
+                r = para.add_run(part)
+                if base_size: r.font.size = base_size
+
+    def shade_cell(cell, hex_color: str):
+        """Apply background fill to a single table cell."""
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), hex_color)
+        tcPr.append(shd)
 
     def set_heading_style(para, level: int):
         """Apply Thrive brand heading colors."""
@@ -254,13 +358,18 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         pPr.append(pBdr)
         return p
 
-    # Title page
+    # Cover / title block
     title_para = doc.add_paragraph()
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = title_para.add_run(draft.title)
-    run.font.size = Pt(24)
+    run.font.size = Pt(22)
     run.font.bold = True
-    run.font.color.rgb = RGBColor(0x11, 0x17, 0x1B)
+    run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
+    sub_para = doc.add_paragraph()
+    sub_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sub_run = sub_para.add_run('Technical Implementation Plan')
+    sub_run.font.size = Pt(12)
+    sub_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
     doc.add_paragraph()
 
     # Parse and render content
@@ -279,7 +388,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             continue
         elif table_lines:
             # Flush table
-            rows = [l for l in table_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
+            rows = [l for l in table_lines if not re.match(r'^\ *\|[-| :]+\|\s*$', l)]
             if rows:
                 cols = len(rows[0].split('|')) - 2
                 t = doc.add_table(rows=0, cols=max(cols, 1))
@@ -288,37 +397,34 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
                     cells = [c.strip() for c in row_line.strip('|').split('|')]
                     tr = t.add_row()
                     for ci, cell_text in enumerate(cells[:max(cols, 1)]):
-                        tr.cells[ci].text = cell_text
+                        cell_obj = tr.cells[ci]
+                        cell_obj.text = ''
+                        cell_para = cell_obj.paragraphs[0]
+                        add_inline_runs(cell_para, cell_text)
                         if ri == 0:
-                            for run in tr.cells[ci].paragraphs[0].runs:
-                                run.font.bold = True
-                                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                        # Header row shading
-                        tc = tr.cells[ci]._tc
-                        tcPr = tc.get_or_add_tcPr()
-                        shd = OxmlElement('w:shd')
-                        shd.set(qn('w:val'), 'clear')
-                        shd.set(qn('w:color'), 'auto')
-                        shd.set(qn('w:fill'), '143F6A')
-                        tcPr.append(shd)
+                            shade_cell(cell_obj, '143F6A')
+                            for r in cell_para.runs:
+                                r.font.bold = True
+                                r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
             table_lines = []
             # Don't skip current line
 
         # Blockquote / callout
         if line.startswith('> '):
-            p = doc.add_paragraph(line[2:].strip())
+            p = doc.add_paragraph()
             p.paragraph_format.left_indent = Inches(0.4)
             pPr = p._p.get_or_add_pPr()
             pBdr = OxmlElement('w:pBdr')
             left = OxmlElement('w:left')
             left.set(qn('w:val'), 'single')
             left.set(qn('w:sz'), '12')
-            left.set(qn('w:color'), '8C9A9E')
+            left.set(qn('w:color'), '143F6A')
             pBdr.append(left)
             pPr.append(pBdr)
-            for run in p.runs:
-                run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
-                run.font.italic = True
+            add_inline_runs(p, line[2:].strip())
+            for r in p.runs:
+                r.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
+                r.font.italic = True
             i += 1
             continue
 
@@ -361,7 +467,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             continue
         if line.startswith('- ') or line.startswith('* '):
             p = doc.add_paragraph(style='List Bullet')
-            p.add_run(line[2:])
+            add_inline_runs(p, line[2:])
             i += 1
             continue
 
@@ -370,22 +476,9 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             i += 1
             continue
 
-        # Normal paragraph — handle inline bold/italic
+        # Normal paragraph
         p = doc.add_paragraph()
-        parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)', line)
-        for part in parts:
-            if part.startswith('**') and part.endswith('**'):
-                run = p.add_run(part[2:-2])
-                run.font.bold = True
-            elif part.startswith('*') and part.endswith('*'):
-                run = p.add_run(part[1:-1])
-                run.font.italic = True
-            elif part.startswith('`') and part.endswith('`'):
-                run = p.add_run(part[1:-1])
-                run.font.name = 'Courier New'
-                run.font.size = Pt(9)
-            else:
-                p.add_run(part)
+        add_inline_runs(p, line)
         i += 1
 
     # Flush any trailing table
@@ -399,10 +492,15 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
                 cells = [c.strip() for c in row_line.strip('|').split('|')]
                 tr = t.add_row()
                 for ci, cell_text in enumerate(cells[:max(cols, 1)]):
-                    tr.cells[ci].text = cell_text
+                    cell_obj = tr.cells[ci]
+                    cell_obj.text = ''
+                    cell_para = cell_obj.paragraphs[0]
+                    add_inline_runs(cell_para, cell_text)
                     if ri == 0:
-                        for run in tr.cells[ci].paragraphs[0].runs:
-                            run.font.bold = True
+                        shade_cell(cell_obj, '143F6A')
+                        for r in cell_para.runs:
+                            r.font.bold = True
+                            r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
     buf = io.BytesIO()
     doc.save(buf)

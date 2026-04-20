@@ -22,36 +22,43 @@ interface ChatMessage {
   content: string
 }
 
+// Parse inline markdown tokens into React nodes
+function parseInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
+  return parts.map((part, pi) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
+      return <strong key={pi}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2)
+      return <em key={pi}>{part.slice(1, -1)}</em>
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2)
+      return <code key={pi} className="bg-gray-100 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
+    return part
+  })
+}
+
 // Render a single line of markdown into JSX
 function renderLine(line: string, key: number) {
   if (line.startsWith('# '))
-    return <h1 key={key} className="text-base font-bold mt-6 mb-1 pb-1 border-b-2" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{line.slice(2)}</h1>
+    return <h1 key={key} className="text-base font-bold mt-6 mb-1 pb-1 border-b-2" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{parseInline(line.slice(2))}</h1>
   if (line.startsWith('## '))
-    return <h2 key={key} className="text-sm font-bold mt-4 mb-1 pb-0.5 border-b" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{line.slice(3)}</h2>
+    return <h2 key={key} className="text-sm font-bold mt-4 mb-1 pb-0.5 border-b" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{parseInline(line.slice(3))}</h2>
   if (line.startsWith('### '))
-    return <h3 key={key} className="text-sm font-semibold mt-3 mb-1" style={{ color: '#143E69' }}>{line.slice(4)}</h3>
+    return <h3 key={key} className="text-sm font-semibold mt-3 mb-1" style={{ color: '#143E69' }}>{parseInline(line.slice(4))}</h3>
   if (line.startsWith('> '))
-    return <blockquote key={key} className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: '#143F6A', color: '#143F6A' }}>{line.slice(2)}</blockquote>
+    return <blockquote key={key} className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: '#143F6A', color: '#143F6A' }}>{parseInline(line.slice(2))}</blockquote>
   if (line.startsWith('- [ ] ') || line.startsWith('[ ] '))
-    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4"><span className="mt-0.5">☐</span><span>{line.replace(/^[-\s]*\[\s\]\s*/, '')}</span></div>
+    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4"><span className="mt-0.5">☐</span><span>{parseInline(line.replace(/^[-\s]*\[\s\]\s*/, ''))}</span></div>
   if (line.startsWith('- [x] ') || line.startsWith('[x] '))
-    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4 text-gray-500"><span className="mt-0.5">☑</span><span className="line-through">{line.replace(/^[-\s]*\[x\]\s*/, '')}</span></div>
+    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4 text-gray-500"><span className="mt-0.5">☑</span><span className="line-through">{parseInline(line.replace(/^[-\s]*\[x\]\s*/, ''))}</span></div>
   if (line.startsWith('- ') || line.startsWith('* '))
-    return <li key={key} className="ml-5 text-sm mb-0.5 text-gray-800">{line.slice(2)}</li>
+    return <li key={key} className="ml-5 text-sm mb-0.5 text-gray-800">{parseInline(line.slice(2))}</li>
   if (line.trim() === '---' || line.trim() === '***')
-    return <hr key={key} className="my-3 border-gray-200" />
+    return <hr key={key} className="my-3" style={{ borderColor: '#143F6A' }} />
   if (line.trim() === '')
     return <div key={key} className="h-2" />
-  // Inline bold/italic
-  const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
   return (
     <p key={key} className="text-sm mb-1 text-gray-800 leading-relaxed">
-      {parts.map((part, pi) => {
-        if (part.startsWith('**') && part.endsWith('**')) return <strong key={pi}>{part.slice(2, -2)}</strong>
-        if (part.startsWith('*') && part.endsWith('*')) return <em key={pi}>{part.slice(1, -1)}</em>
-        if (part.startsWith('`') && part.endsWith('`')) return <code key={pi} className="bg-gray-100 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
-        return part
-      })}
+      {parseInline(line)}
     </p>
   )
 }
