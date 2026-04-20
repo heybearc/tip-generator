@@ -13,7 +13,7 @@ class ClaudeService:
     
     def __init__(self):
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
-        self.model = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+        self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
         self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", "4096"))
         
         if not self.api_key:
