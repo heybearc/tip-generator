@@ -296,9 +296,10 @@ export default function DraftViewPage() {
 
   const handleSaveSection = async (sectionKey: string, content: string) => {
     if (!draft) return
+    // Pass key in body to avoid URL encoding issues with slashes in section names
     await axios.patch(
-      `${API_URL}/generate/drafts/${draft.id}/sections/${encodeURIComponent(sectionKey)}`,
-      { content }
+      `${API_URL}/generate/drafts/${draft.id}/sections/section`,
+      { key: sectionKey, content }
     )
     setDraft(prev => prev ? {
       ...prev,

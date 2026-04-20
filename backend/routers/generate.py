@@ -187,26 +187,30 @@ async def delete_draft(draft_id: int, db: Session = Depends(get_db)):
     return {"message": "Draft deleted", "id": draft_id}
 
 
-@router.patch("/drafts/{draft_id}/sections/{section_key}")
+@router.patch("/drafts/{draft_id}/sections/{section_key:path}")
 async def update_draft_section(
     draft_id: int,
     section_key: str,
     body: dict,
     db: Session = Depends(get_db)
 ):
-    """Update a single section of a draft by key."""
+    """Update a single section of a draft by key.
+    section_key may also be passed in body as 'key' to avoid URL slash issues.
+    """
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
+    # Prefer key from body if present (avoids URL encoding issues with slashes)
+    resolved_key = body.get("key") or section_key
     sections = dict(draft.sections or {})
-    sections[section_key] = body.get("content", "")
+    sections[resolved_key] = body.get("content", "")
     draft.sections = sections
     draft.content = "\n\n".join(
         f"## {k}\n\n{v}" for k, v in sections.items() if v
     )
     db.commit()
     db.refresh(draft)
-    return {"section": section_key, "saved": True}
+    return {"section": resolved_key, "saved": True}
 
 
 @router.get("/template-instructions")
