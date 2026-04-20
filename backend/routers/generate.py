@@ -2,9 +2,11 @@
 TIP generation API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
+import io
 from database import get_db
 from models.draft import Draft, DraftStatus
 from models.document import Document
@@ -174,3 +176,234 @@ async def delete_draft(draft_id: int, db: Session = Depends(get_db)):
     db.delete(draft)
     db.commit()
     return {"message": "Draft deleted", "id": draft_id}
+
+
+@router.patch("/drafts/{draft_id}/sections/{section_key}")
+async def update_draft_section(
+    draft_id: int,
+    section_key: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Update a single section of a draft by key."""
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    sections = dict(draft.sections or {})
+    sections[section_key] = body.get("content", "")
+    draft.sections = sections
+    draft.content = "\n\n".join(
+        f"## {k}\n\n{v}" for k, v in sections.items() if v
+    )
+    db.commit()
+    db.refresh(draft)
+    return {"section": section_key, "saved": True}
+
+
+@router.get("/drafts/{draft_id}/export")
+async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
+    """Export a completed draft as a formatted Word (.docx) document."""
+    from docx import Document as DocxDocument
+    from docx.shared import Pt, RGBColor, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    import re
+
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if not draft.content:
+        raise HTTPException(status_code=400, detail="Draft has no content to export")
+
+    doc = DocxDocument()
+
+    # Page margins
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+
+    def set_heading_style(para, level: int):
+        """Apply Thrive brand heading colors."""
+        run = para.runs[0] if para.runs else para.add_run()
+        if level == 1:
+            run.font.size = Pt(16)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0x11, 0x17, 0x1B)
+        elif level == 2:
+            run.font.size = Pt(13)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0x44, 0x54, 0x5B)
+        elif level == 3:
+            run.font.size = Pt(11)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
+
+    def add_horizontal_rule(doc):
+        p = doc.add_paragraph()
+        pPr = p._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '6')
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), 'C9D2D4')
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        return p
+
+    # Title page
+    title_para = doc.add_paragraph()
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title_para.add_run(draft.title)
+    run.font.size = Pt(24)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(0x11, 0x17, 0x1B)
+    doc.add_paragraph()
+
+    # Parse and render content
+    lines = draft.content.split('\n')
+    i = 0
+    table_lines = []
+    in_table = False
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Table detection
+        if line.strip().startswith('|'):
+            table_lines.append(line)
+            i += 1
+            continue
+        elif table_lines:
+            # Flush table
+            rows = [l for l in table_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
+            if rows:
+                cols = len(rows[0].split('|')) - 2
+                t = doc.add_table(rows=0, cols=max(cols, 1))
+                t.style = 'Table Grid'
+                for ri, row_line in enumerate(rows):
+                    cells = [c.strip() for c in row_line.strip('|').split('|')]
+                    tr = t.add_row()
+                    for ci, cell_text in enumerate(cells[:max(cols, 1)]):
+                        tr.cells[ci].text = cell_text
+                        if ri == 0:
+                            for run in tr.cells[ci].paragraphs[0].runs:
+                                run.font.bold = True
+            table_lines = []
+            # Don't skip current line
+
+        # Blockquote / callout
+        if line.startswith('> '):
+            p = doc.add_paragraph(line[2:].strip())
+            p.paragraph_format.left_indent = Inches(0.4)
+            pPr = p._p.get_or_add_pPr()
+            pBdr = OxmlElement('w:pBdr')
+            left = OxmlElement('w:left')
+            left.set(qn('w:val'), 'single')
+            left.set(qn('w:sz'), '12')
+            left.set(qn('w:color'), '8C9A9E')
+            pBdr.append(left)
+            pPr.append(pBdr)
+            for run in p.runs:
+                run.font.color.rgb = RGBColor(0x44, 0x54, 0x5B)
+                run.font.italic = True
+            i += 1
+            continue
+
+        # Headings
+        if line.startswith('# '):
+            p = doc.add_paragraph(line[2:])
+            set_heading_style(p, 1)
+            add_horizontal_rule(doc)
+            i += 1
+            continue
+        if line.startswith('## '):
+            p = doc.add_paragraph(line[3:])
+            set_heading_style(p, 2)
+            i += 1
+            continue
+        if line.startswith('### '):
+            p = doc.add_paragraph(line[4:])
+            set_heading_style(p, 3)
+            i += 1
+            continue
+
+        # Horizontal rule
+        if line.strip() in ('---', '***', '___'):
+            add_horizontal_rule(doc)
+            i += 1
+            continue
+
+        # Bullet / checklist
+        if line.startswith('- [ ] ') or line.startswith('[ ] '):
+            text = line.lstrip('- ').lstrip('[ ] ').strip()
+            p = doc.add_paragraph(style='List Bullet')
+            p.add_run(f'☐  {text}')
+            i += 1
+            continue
+        if line.startswith('- [x] ') or line.startswith('[x] '):
+            text = line.lstrip('- ').lstrip('[x] ').strip()
+            p = doc.add_paragraph(style='List Bullet')
+            p.add_run(f'☑  {text}')
+            i += 1
+            continue
+        if line.startswith('- ') or line.startswith('* '):
+            p = doc.add_paragraph(style='List Bullet')
+            p.add_run(line[2:])
+            i += 1
+            continue
+
+        # Blank line
+        if line.strip() == '':
+            i += 1
+            continue
+
+        # Normal paragraph — handle inline bold/italic
+        p = doc.add_paragraph()
+        parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)', line)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**'):
+                run = p.add_run(part[2:-2])
+                run.font.bold = True
+            elif part.startswith('*') and part.endswith('*'):
+                run = p.add_run(part[1:-1])
+                run.font.italic = True
+            elif part.startswith('`') and part.endswith('`'):
+                run = p.add_run(part[1:-1])
+                run.font.name = 'Courier New'
+                run.font.size = Pt(9)
+            else:
+                p.add_run(part)
+        i += 1
+
+    # Flush any trailing table
+    if table_lines:
+        rows = [l for l in table_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
+        if rows:
+            cols = len(rows[0].split('|')) - 2
+            t = doc.add_table(rows=0, cols=max(cols, 1))
+            t.style = 'Table Grid'
+            for ri, row_line in enumerate(rows):
+                cells = [c.strip() for c in row_line.strip('|').split('|')]
+                tr = t.add_row()
+                for ci, cell_text in enumerate(cells[:max(cols, 1)]):
+                    tr.cells[ci].text = cell_text
+                    if ri == 0:
+                        for run in tr.cells[ci].paragraphs[0].runs:
+                            run.font.bold = True
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    safe_title = re.sub(r'[^\w\s-]', '', draft.title).strip().replace(' ', '_')
+    filename = f"{safe_title}.docx"
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
