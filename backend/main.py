@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import Base, engine, get_db
 import models  # Import models to register them with Base
+from routers import upload_router
 import os
 
 # Create database tables
@@ -18,6 +19,35 @@ app = FastAPI(
     description="AI-powered Technical Implementation Plan generator using Claude API",
     version="0.1.0"
 )
+
+# Include routers
+app.include_router(upload_router)
+
+@app.on_event("startup")
+async def startup_event():
+    """Create default user if not exists"""
+    from models.user import User
+    from database import SessionLocal
+    
+    db = SessionLocal()
+    try:
+        # Check if default user exists
+        user = db.query(User).filter(User.id == 1).first()
+        if not user:
+            # Create default user
+            user = User(
+                id=1,
+                email="admin@tip-generator.local",
+                username="admin",
+                full_name="TIP Generator Admin",
+                is_active=True,
+                is_superuser=True
+            )
+            db.add(user)
+            db.commit()
+            print("✅ Created default user (id=1)")
+    finally:
+        db.close()
 
 # Configure CORS
 cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
