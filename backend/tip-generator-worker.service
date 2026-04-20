@@ -8,6 +8,8 @@ User=root
 WorkingDirectory=/opt/tip-generator/backend
 Environment="PATH=/opt/tip-generator/backend/venv/bin"
 ExecStart=/opt/tip-generator/backend/venv/bin/celery -A celery_app worker --loglevel=info --concurrency=2 -n tip-worker@%%h
+KillSignal=SIGTERM
+TimeoutStopSec=600
 Restart=always
 RestartSec=15
 StandardOutput=journal
