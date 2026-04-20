@@ -99,7 +99,7 @@ export default function TemplateManagementPage() {
     }
   }
 
-  const handleDownload = (templateId: number, filename: string) => {
+  const handleDownload = (templateId: number) => {
     window.open(`${API_URL}/templates/download/${templateId}`, '_blank')
   }
 
@@ -158,7 +158,7 @@ export default function TemplateManagementPage() {
                 </div>
               </div>
               <button
-                onClick={() => handleDownload(currentTemplate.id, currentTemplate.filename)}
+                onClick={() => handleDownload(currentTemplate.id)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Download className="w-4 h-4" />
@@ -258,7 +258,7 @@ export default function TemplateManagementPage() {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleDownload(template.id, template.filename)}
+                    onClick={() => handleDownload(template.id)}
                     className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
                   >
                     Download
