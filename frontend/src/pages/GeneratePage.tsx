@@ -84,12 +84,25 @@ export default function GeneratePage() {
       })
       const draftId = createRes.data.id
 
-      // 2. Generate TIP
-      const genRes = await axios.post(`${API_URL}/generate/tip`, { draft_id: draftId })
+      // 2. Start generation (returns immediately, runs in background)
+      await axios.post(`${API_URL}/generate/tip`, { draft_id: draftId })
 
-      // 3. Load full draft
-      const draftRes = await axios.get(`${API_URL}/generate/drafts/${genRes.data.draft_id}`)
-      setDraft(draftRes.data)
+      // 3. Poll until completed or failed (up to 10 minutes)
+      let attempts = 0
+      while (attempts < 120) {
+        await new Promise(r => setTimeout(r, 5000)) // wait 5s between polls
+        const pollRes = await axios.get(`${API_URL}/generate/drafts/${draftId}`)
+        const polledDraft = pollRes.data
+        if (polledDraft.status === 'completed' || polledDraft.status === 'failed') {
+          setDraft(polledDraft)
+          if (polledDraft.status === 'failed') {
+            setError(polledDraft.content || 'Generation failed')
+          }
+          return
+        }
+        attempts++
+      }
+      setError('Generation timed out — check Drafts page for status')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Generation failed')
     } finally {
