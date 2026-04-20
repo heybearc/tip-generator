@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -63,11 +63,20 @@ function renderLine(line: string, key: number) {
   )
 }
 
+const REFINE_MODES = [
+  { value: 'tighten', label: 'Tighten', description: 'Condense by 30–50%, remove wordiness' },
+  { value: 'comply',  label: 'Apply Template', description: 'Restructure to match template instructions' },
+  { value: 'risks',   label: 'Fix Risks Format', description: 'Reformat risks into 4-field structure' },
+  { value: 'both',    label: 'Tighten + Apply', description: 'Condense AND apply template structure' },
+]
+
 function SectionEditor({
+  draftId,
   sectionKey,
   content,
   onSave,
 }: {
+  draftId: number
   sectionKey: string
   content: string
   onSave: (key: string, value: string) => Promise<void>
@@ -76,6 +85,11 @@ function SectionEditor({
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(content)
   const [saving, setSaving] = useState(false)
+  const [refineOpen, setRefineOpen] = useState(false)
+  const [refineMode, setRefineMode] = useState('tighten')
+  const [refining, setRefining] = useState(false)
+  const [refinedPreview, setRefinedPreview] = useState<string | null>(null)
+  const [refineInstruction, setRefineInstruction] = useState<string | null>(null)
 
   const handleSave = async () => {
     setSaving(true)
@@ -84,28 +98,67 @@ function SectionEditor({
     setEditing(false)
   }
 
+  const handleRefine = async () => {
+    setRefining(true)
+    setRefinedPreview(null)
+    try {
+      const res = await axios.post(`${API_URL}/generate/drafts/${draftId}/refine-guided`, {
+        section_key: sectionKey,
+        current_content: value || content,
+        mode: refineMode,
+      })
+      setRefinedPreview(res.data.suggestion)
+      setRefineInstruction(res.data.instruction_used)
+    } catch {
+      setRefinedPreview('Error: refinement failed. Please try again.')
+    } finally {
+      setRefining(false)
+    }
+  }
+
+  const applyRefined = () => {
+    if (refinedPreview) {
+      setValue(refinedPreview)
+      setEditing(true)
+      setRefinedPreview(null)
+      setRefineOpen(false)
+    }
+  }
+
   const lines = content.split('\n')
   const preview = lines.slice(0, 3).join(' ').slice(0, 120)
+  const wordCount = content.split(/\s+/).filter(Boolean).length
 
   return (
     <div className="border rounded-xl overflow-hidden mb-3">
       {/* Section header */}
       <div
         className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-        onClick={() => { setExpanded(!expanded); setEditing(false) }}
+        onClick={() => { setExpanded(!expanded); setEditing(false); setRefineOpen(false) }}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
           <span className="font-semibold text-sm text-gray-900 truncate">{sectionKey}</span>
+          <span className="text-xs text-gray-400 flex-shrink-0">{wordCount}w</span>
         </div>
         {!expanded && <span className="text-xs text-gray-400 ml-4 truncate max-w-xs hidden md:block">{preview}…</span>}
         {expanded && !editing && (
-          <button
-            onClick={e => { e.stopPropagation(); setEditing(true) }}
-            className="ml-4 flex-shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
-          >
-            <Edit3 className="w-3 h-3" /> Edit
-          </button>
+          <div className="ml-4 flex-shrink-0 flex gap-1" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setRefineOpen(!refineOpen)}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
+                refineOpen ? 'bg-amber-500 text-white border-amber-500' : 'bg-white border-gray-300 text-gray-600 hover:bg-amber-50 hover:border-amber-400 hover:text-amber-700'
+              }`}
+            >
+              <Sparkles className="w-3 h-3" /> Refine
+            </button>
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+            >
+              <Edit3 className="w-3 h-3" /> Edit
+            </button>
+          </div>
         )}
         {editing && (
           <div className="ml-4 flex-shrink-0 flex gap-1" onClick={e => e.stopPropagation()}>
@@ -125,6 +178,69 @@ function SectionEditor({
           </div>
         )}
       </div>
+
+      {/* Template-guided refine panel */}
+      {expanded && refineOpen && !editing && (
+        <div className="border-t bg-amber-50 px-4 py-3" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-semibold text-amber-800">Refine per Thrive template</span>
+            {refineInstruction && (
+              <span className="text-xs text-amber-600 italic truncate max-w-xs" title={refineInstruction}>
+                Template says: {refineInstruction.slice(0, 60)}…
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {REFINE_MODES.map(m => (
+              <button
+                key={m.value}
+                onClick={() => setRefineMode(m.value)}
+                title={m.description}
+                className={`text-xs px-2 py-1 rounded border transition-colors ${
+                  refineMode === m.value
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400 hover:text-amber-700'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+            <button
+              onClick={handleRefine}
+              disabled={refining}
+              className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {refining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {refining ? 'Refining…' : 'Run'}
+            </button>
+          </div>
+          {refinedPreview && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-gray-600">
+                  Preview ({refinedPreview.split(/\s+/).filter(Boolean).length}w vs {wordCount}w original)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setRefinedPreview(null)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >Discard</button>
+                  <button
+                    onClick={applyRefined}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                  >
+                    <CheckCircle className="w-3 h-3" /> Apply to editor
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-60 overflow-y-auto p-3 bg-white border rounded-lg text-xs text-gray-700 whitespace-pre-wrap font-mono">
+                {refinedPreview}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Section body */}
       {expanded && (
@@ -303,6 +419,7 @@ export default function DraftViewPage() {
             sectionEntries.map(([key, value]) => (
               <SectionEditor
                 key={key}
+                draftId={draft.id}
                 sectionKey={key}
                 content={value || ''}
                 onSave={handleSaveSection}

@@ -200,6 +200,127 @@ async def update_draft_section(
     return {"section": section_key, "saved": True}
 
 
+@router.get("/template-instructions")
+async def get_template_instructions():
+    """Return the parsed instruction map from the Thrive TIP template."""
+    import os, json as _json
+    path = os.path.join(os.path.dirname(__file__), '..', 'static', 'template_instructions.json')
+    path = os.path.normpath(path)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Template instructions not yet extracted")
+    with open(path) as f:
+        return _json.load(f)
+
+
+@router.post("/drafts/{draft_id}/refine-guided")
+async def refine_section_guided(
+    draft_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    claude_service: ClaudeService = Depends(get_claude_service)
+):
+    """Refine a single section using the template instruction for that section type."""
+    import os, json as _json
+
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    section_key = body.get("section_key", "")
+    current_content = body.get("current_content", "")
+    mode = body.get("mode", "tighten")  # tighten | comply | risks | both
+
+    # Load instruction map
+    instr_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'template_instructions.json')
+    instr_path = os.path.normpath(instr_path)
+    template_instructions = {}
+    if os.path.exists(instr_path):
+        with open(instr_path) as f:
+            data = _json.load(f)
+            template_instructions = data.get("instructions", {})
+
+    # Find the best matching instruction key
+    instruction_text = None
+    for key in template_instructions:
+        if key and (key.lower() in section_key.lower() or section_key.lower() in key.lower()):
+            instruction_text = template_instructions[key]
+            break
+    # Fallback: try substring match on H2-level keys
+    if not instruction_text:
+        h2_keys = ["Executive Summary", "Implementation Summary", "Requirements/Prerequisites",
+                   "Approximate Timing", "Implementation Details", "Risks and Contingencies",
+                   "Testing and Verification", "Day-1 Support", "Acceptance Criteria",
+                   "Deliverables", "Timeline of Phases"]
+        for key in h2_keys:
+            if key.lower() in section_key.lower():
+                instruction_text = template_instructions.get(key)
+                break
+
+    mode_prompts = {
+        "tighten": (
+            "Your job is to tighten and condense this section. Remove redundancy, "
+            "wordiness, and over-explanation. Preserve all factual detail. "
+            "Aim to reduce length by 30-50% without losing substance."
+        ),
+        "comply": (
+            "Your job is to rewrite this section so it precisely follows the template instruction below. "
+            "Remove content that doesn't belong in this section type. Add structure the instruction requires. "
+            "Keep all factual specifics from the original."
+        ),
+        "risks": (
+            "Your job is to reformat the risks in this section to follow the 4-field structure: "
+            "(1) Risk description, (2) Likelihood/Impact, (3) Mitigation strategy, (4) Rollback plan. "
+            "Each risk should be a concise bullet block, not flowing prose."
+        ),
+        "both": (
+            "Your job is to tighten AND rewrite this section to precisely follow the template instruction. "
+            "Remove redundancy. Apply required structure. Preserve all factual detail from the original."
+        ),
+    }
+
+    mode_instruction = mode_prompts.get(mode, mode_prompts["tighten"])
+
+    system_prompt = f"""You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP).
+
+{mode_instruction}
+
+{"TEMPLATE INSTRUCTION FOR THIS SECTION TYPE: " + instruction_text if instruction_text else ""}
+
+Rules:
+- Return ONLY the revised section content, no preamble or explanation
+- Preserve all customer-specific details, IP addresses, server names, dates
+- Use markdown formatting (## headings, bullets, **bold** for key terms)
+- Do not invent facts or add content not grounded in the original
+- For Risks sections: use bullet blocks with the 4-field structure
+- For Implementation Details: use numbered steps or clear sub-sections"""
+
+    prompt = f"""Section: {section_key}
+
+Current content:
+{current_content}
+
+Rewrite this section following the rules above."""
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        message = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        suggestion = message.content[0].text
+        return {
+            "suggestion": suggestion,
+            "section_key": section_key,
+            "instruction_used": instruction_text or "general tighten",
+            "mode": mode
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
+
+
 @router.get("/drafts/{draft_id}/export")
 async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     """Export a completed draft as a formatted Word (.docx) document."""
