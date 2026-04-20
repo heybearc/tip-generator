@@ -31,6 +31,9 @@ class DocumentResponse(BaseModel):
 class DocumentUploadResponse(BaseModel):
     """Response after successful upload"""
     message: str
-    document_id: int
+    id: int  # Changed from document_id for frontend compatibility
     filename: str
-    status: DocumentStatus
+    file_type: str
+    file_size: int
+    uploaded_at: datetime
+    status: str  # Changed from DocumentStatus to string for frontend

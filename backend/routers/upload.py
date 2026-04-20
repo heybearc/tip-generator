@@ -53,10 +53,12 @@ async def upload_document(
         
         return DocumentUploadResponse(
             message="File uploaded successfully",
-            document_id=document.id,
-            filename=document.filename,
-            file_type=document.document_type.value,
-            status=document.status
+            id=document.id,
+            filename=document.original_filename,
+            file_type=document.mime_type or file.content_type,
+            file_size=document.file_size or 0,
+            uploaded_at=document.created_at,
+            status=document.status.value
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
