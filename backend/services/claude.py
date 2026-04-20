@@ -349,21 +349,25 @@ class ClaudeService:
         parts.append("Generate the TIP document now:\n")
         return "".join(parts)
 
-    async def refine_tip(self, instruction: str, current_content: str) -> str:
+    def refine_tip(self, instruction: str, current_content: str) -> str:
         """
-        Refine or edit TIP content based on a user instruction.
-        Returns the revised full document content.
+        Refine or edit TIP section content based on a user instruction.
+        Runs synchronously — call from a thread or sync context.
+        Returns the revised content only.
         """
+        # Limit content to avoid exceeding context — section content, not full doc
+        content_snippet = current_content[:16000]
         prompt = (
-            "You are helping a technical writer refine a Technical Implementation Plan.\n\n"
-            f"=== CURRENT TIP CONTENT ===\n{current_content[:20000]}\n\n"
+            "You are helping a technical writer refine a section of a Technical Implementation Plan (TIP).\n\n"
+            f"=== CURRENT SECTION CONTENT ===\n{content_snippet}\n\n"
             f"=== USER INSTRUCTION ===\n{instruction}\n\n"
-            "Apply the instruction to improve the TIP. Return ONLY the revised content, "
-            "preserving all sections and markdown headings. Do not add commentary or preamble."
+            "Apply the instruction to rewrite or improve this section content. "
+            "Return ONLY the revised section text with markdown formatting. "
+            "Do not add a preamble, explanation, or commentary."
         )
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=self.max_tokens,
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text

@@ -137,16 +137,25 @@ async def refine_draft(
     request: RefineRequest,
     db: Session = Depends(get_db)
 ):
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
+    if not draft.content and not request.current_content:
+        raise HTTPException(status_code=400, detail="Draft has no content to refine")
     try:
         claude_service = get_claude_service()
         content = request.current_content or draft.content or ""
-        suggestion = await claude_service.refine_tip(
-            instruction=request.instruction,
-            current_content=content
-        )
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            suggestion = await loop.run_in_executor(
+                pool,
+                lambda: claude_service.refine_tip(
+                    instruction=request.instruction,
+                    current_content=content
+                )
+            )
         return RefineResponse(suggestion=suggestion)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
@@ -239,12 +248,27 @@ async def refine_section_guided(
             data = _json.load(f)
             template_instructions = data.get("instructions", {})
 
-    # Find the best matching instruction key
+    # Hard-coded rules for sections the template doesn't have an explicit instruction block for
+    HARD_RULES = {
+        "revision history": (
+            "The Revision History table must use version number 1.0 for the initial release (not 0.1 or 0.9). "
+            "Format as a markdown table with columns: Rev #, Author(s), Change, Date. "
+            "The first row should have Rev # = 1.0, Author = Thrive, Change = Initial Release, Date = today or the document date."
+        ),
+    }
+
+    # Find the best matching instruction key — check hard rules first
     instruction_text = None
-    for key in template_instructions:
-        if key and (key.lower() in section_key.lower() or section_key.lower() in key.lower()):
-            instruction_text = template_instructions[key]
+    for rule_key, rule_text in HARD_RULES.items():
+        if rule_key in section_key.lower():
+            instruction_text = rule_text
             break
+
+    if not instruction_text:
+        for key in template_instructions:
+            if key and (key.lower() in section_key.lower() or section_key.lower() in key.lower()):
+                instruction_text = template_instructions[key]
+                break
     # Fallback: try substring match on H2-level keys
     if not instruction_text:
         h2_keys = ["Executive Summary", "Implementation Summary", "Requirements/Prerequisites",
@@ -280,19 +304,21 @@ async def refine_section_guided(
 
     mode_instruction = mode_prompts.get(mode, mode_prompts["tighten"])
 
+    instruction_block = f"\nTEMPLATE INSTRUCTION FOR THIS SECTION TYPE:\n{instruction_text}\n" if instruction_text else ""
+
     system_prompt = f"""You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP).
 
 {mode_instruction}
-
-{"TEMPLATE INSTRUCTION FOR THIS SECTION TYPE: " + instruction_text if instruction_text else ""}
-
+{instruction_block}
 Rules:
 - Return ONLY the revised section content, no preamble or explanation
+- You MUST follow the template instruction above precisely — it is authoritative
 - Preserve all customer-specific details, IP addresses, server names, dates
 - Use markdown formatting (## headings, bullets, **bold** for key terms)
 - Do not invent facts or add content not grounded in the original
-- For Risks sections: use bullet blocks with the 4-field structure
-- For Implementation Details: use numbered steps or clear sub-sections"""
+- For Risks sections: use bullet blocks with the 4-field structure per risk: Risk | Likelihood/Impact | Mitigation | Rollback
+- For Implementation Details: use numbered steps or clear sub-sections
+- For Revision History: version 1.0 = initial release (never 0.1)"""
 
     prompt = f"""Section: {section_key}
 
@@ -303,14 +329,23 @@ Rewrite this section following the rules above."""
 
     try:
         import anthropic
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=4096,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        suggestion = message.content[0].text
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _call_claude():
+            client = anthropic.Anthropic()
+            message = client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return message.content[0].text
+
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            suggestion = await loop.run_in_executor(pool, _call_claude)
+
         return {
             "suggestion": suggestion,
             "section_key": section_key,
