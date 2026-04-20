@@ -19,6 +19,7 @@ class TemplateFile(Base):
     # Metadata
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     notes = Column(Text, nullable=True)  # What changed in this version
+    template_structure = Column(Text, nullable=True)  # JSON: parsed template structure (sections, placeholders, instructions)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):

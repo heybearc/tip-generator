@@ -1,15 +1,17 @@
 """
 Template file management API endpoints
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
-from database import get_db
+from database.config import get_db
 from models.template_file import TemplateFile
-from schemas.template_file import TemplateFileResponse, TemplateFileUploadResponse
-from services.upload import UploadService
-import os
+from schemas.template_file import TemplateFileResponse
+from services.template_parser import parse_template_file
 from pathlib import Path
+import os
+import json
+from services.upload import UploadService
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 upload_service = UploadService()
@@ -92,6 +94,14 @@ async def upload_template(
             content = await file.read()
             f.write(content)
         
+        # Parse template structure
+        try:
+            parsed_structure = parse_template_file(str(file_path))
+            structure_json = json.dumps(parsed_structure)
+        except Exception as parse_error:
+            print(f"Warning: Could not parse template structure: {parse_error}")
+            structure_json = None
+        
         # Deactivate all previous templates
         db.query(TemplateFile)\
             .update({"is_active": False})
@@ -104,7 +114,8 @@ async def upload_template(
             version=next_version,
             is_active=True,
             uploaded_by=TEMP_USER_ID,
-            notes=notes or f"Template version {next_version}"
+            notes=notes or f"Template version {next_version}",
+            template_structure=structure_json
         )
         
         db.add(template)
@@ -174,3 +185,39 @@ async def download_template(
         filename=template.filename,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
+
+@router.get("/{template_id}/structure")
+async def get_template_structure(
+    template_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get the parsed structure of a template
+    
+    Returns:
+    - sections: List of sections with headings and content
+    - placeholders: List of all placeholders
+    - instructions: List of Claude instructions
+    - metadata: Document metadata
+    """
+    template = db.query(TemplateFile)\
+        .filter(TemplateFile.id == template_id)\
+        .first()
+    
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if not template.template_structure:
+        raise HTTPException(
+            status_code=404, 
+            detail="Template structure not available. Template may need to be re-uploaded."
+        )
+    
+    try:
+        structure = json.loads(template.template_structure)
+        return structure
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to parse template structure"
+        )
