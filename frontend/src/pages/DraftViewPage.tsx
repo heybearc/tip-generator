@@ -25,13 +25,13 @@ interface ChatMessage {
 // Render a single line of markdown into JSX
 function renderLine(line: string, key: number) {
   if (line.startsWith('# '))
-    return <h1 key={key} className="text-xl font-bold mt-6 mb-2 pb-1 border-b-2 border-gray-200" style={{ color: '#11171B' }}>{line.slice(2)}</h1>
+    return <h1 key={key} className="text-base font-bold mt-6 mb-1 pb-1 border-b-2" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{line.slice(2)}</h1>
   if (line.startsWith('## '))
-    return <h2 key={key} className="text-base font-semibold mt-4 mb-1" style={{ color: '#44545B' }}>{line.slice(3)}</h2>
+    return <h2 key={key} className="text-sm font-bold mt-4 mb-1 pb-0.5 border-b" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{line.slice(3)}</h2>
   if (line.startsWith('### '))
-    return <h3 key={key} className="text-sm font-semibold mt-3 mb-1" style={{ color: '#8C9A9E' }}>{line.slice(4)}</h3>
+    return <h3 key={key} className="text-sm font-semibold mt-3 mb-1" style={{ color: '#143E69' }}>{line.slice(4)}</h3>
   if (line.startsWith('> '))
-    return <blockquote key={key} className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: '#8C9A9E', color: '#44545B' }}>{line.slice(2)}</blockquote>
+    return <blockquote key={key} className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: '#143F6A', color: '#143F6A' }}>{line.slice(2)}</blockquote>
   if (line.startsWith('- [ ] ') || line.startsWith('[ ] '))
     return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4"><span className="mt-0.5">☐</span><span>{line.replace(/^[-\s]*\[\s\]\s*/, '')}</span></div>
   if (line.startsWith('- [x] ') || line.startsWith('[x] '))

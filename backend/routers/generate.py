@@ -229,17 +229,17 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         """Apply Thrive brand heading colors."""
         run = para.runs[0] if para.runs else para.add_run()
         if level == 1:
-            run.font.size = Pt(16)
+            run.font.size = Pt(14)
             run.font.bold = True
-            run.font.color.rgb = RGBColor(0x11, 0x17, 0x1B)
+            run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
         elif level == 2:
-            run.font.size = Pt(13)
+            run.font.size = Pt(12)
             run.font.bold = True
-            run.font.color.rgb = RGBColor(0x44, 0x54, 0x5B)
+            run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
         elif level == 3:
             run.font.size = Pt(11)
             run.font.bold = True
-            run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
+            run.font.color.rgb = RGBColor(0x14, 0x3E, 0x69)
 
     def add_horizontal_rule(doc):
         p = doc.add_paragraph()
@@ -249,7 +249,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         bottom.set(qn('w:val'), 'single')
         bottom.set(qn('w:sz'), '6')
         bottom.set(qn('w:space'), '1')
-        bottom.set(qn('w:color'), 'C9D2D4')
+        bottom.set(qn('w:color'), '143F6A')
         pBdr.append(bottom)
         pPr.append(pBdr)
         return p
@@ -292,6 +292,15 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
                         if ri == 0:
                             for run in tr.cells[ci].paragraphs[0].runs:
                                 run.font.bold = True
+                                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                        # Header row shading
+                        tc = tr.cells[ci]._tc
+                        tcPr = tc.get_or_add_tcPr()
+                        shd = OxmlElement('w:shd')
+                        shd.set(qn('w:val'), 'clear')
+                        shd.set(qn('w:color'), 'auto')
+                        shd.set(qn('w:fill'), '143F6A')
+                        tcPr.append(shd)
             table_lines = []
             # Don't skip current line
 
@@ -308,7 +317,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             pBdr.append(left)
             pPr.append(pBdr)
             for run in p.runs:
-                run.font.color.rgb = RGBColor(0x44, 0x54, 0x5B)
+                run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
                 run.font.italic = True
             i += 1
             continue
