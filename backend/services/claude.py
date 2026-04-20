@@ -91,13 +91,26 @@ class ClaudeService:
                 generated_content = response.content[0].text
                 total_tokens = response.usage.output_tokens
 
+            from datetime import datetime, date
+
+            # Post-process: stamp Revision History with correct date and author
+            author_name = "Thrive"
+            if db:
+                try:
+                    from models.user import User as UserModel
+                    user = db.query(UserModel).filter(UserModel.id == draft.user_id).first()
+                    if user:
+                        author_name = user.full_name or user.username
+                except Exception:
+                    pass
+            today_str = date.today().strftime("%B %d, %Y")
+            generated_content = self._fix_revision_history(generated_content, author_name, today_str)
+
             draft.content = generated_content
             draft.status = DraftStatus.COMPLETED
             draft.claude_model = self.model
             draft.generation_tokens = total_tokens
             draft.sections = self._parse_sections(generated_content, template_structure)
-
-            from datetime import datetime
             draft.generated_at = datetime.utcnow()
 
             db.commit()
@@ -371,6 +384,34 @@ class ClaudeService:
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
+
+    def _fix_revision_history(self, content: str, author_name: str, today_str: str) -> str:
+        """
+        Replace whatever revision history table Claude generated with a canonical
+        1.0 / author / today row.  Works on both the full document and a section snippet.
+        """
+        import re
+
+        canonical_table = (
+            "| Rev # | Author(s) | Change | Date |\n"
+            "|-------|-----------|--------|------|\n"
+            f"| 1.0 | {author_name} | Initial Release | {today_str} |"
+        )
+
+        # Match any markdown table that follows a "Revision History" heading
+        # and replace it wholesale with the canonical table
+        pattern = re.compile(
+            r'(#+\s*Revision History[^\n]*\n)'   # heading line
+            r'(\n?(?:\|[^\n]+\n)+)',              # one or more table rows
+            re.IGNORECASE
+        )
+        replaced, n = pattern.subn(lambda m: m.group(1) + "\n" + canonical_table + "\n", content)
+        if n:
+            return replaced
+
+        # If no table found under the heading, just return as-is (Claude may not have
+        # generated a table — the refine-guided endpoint will handle it)
+        return content
 
     def _parse_sections(
         self,

@@ -235,9 +235,17 @@ async def refine_section_guided(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
+    import datetime as _dt
+    from models.user import User as UserModel
+
     section_key = body.get("section_key", "")
     current_content = body.get("current_content", "")
     mode = body.get("mode", "tighten")  # tighten | comply | risks | both
+
+    # Resolve author name from current user
+    current_user = db.query(UserModel).filter(UserModel.id == TEMP_USER_ID).first()
+    author_name = (current_user.full_name or current_user.username) if current_user else "Thrive"
+    today = _dt.date.today().strftime("%B %d, %Y")
 
     # Load instruction map
     instr_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'template_instructions.json')
@@ -251,9 +259,10 @@ async def refine_section_guided(
     # Hard-coded rules for sections the template doesn't have an explicit instruction block for
     HARD_RULES = {
         "revision history": (
-            "The Revision History table must use version number 1.0 for the initial release (not 0.1 or 0.9). "
-            "Format as a markdown table with columns: Rev #, Author(s), Change, Date. "
-            "The first row should have Rev # = 1.0, Author = Thrive, Change = Initial Release, Date = today or the document date."
+            f"The Revision History table must use version number 1.0 for the initial release (never 0.1 or 0.9). "
+            f"Format as a markdown table with columns: Rev #, Author(s), Change, Date. "
+            f"The first and only row should be: | 1.0 | {author_name} | Initial Release | {today} |. "
+            f"Today's date is {today}. The author is {author_name}. Do not use any other date or version number."
         ),
     }
 
@@ -279,6 +288,20 @@ async def refine_section_guided(
             if key.lower() in section_key.lower():
                 instruction_text = template_instructions.get(key)
                 break
+
+    # Revision History: skip Claude entirely — stamp deterministically
+    if "revision history" in section_key.lower():
+        canonical = (
+            "| Rev # | Author(s) | Change | Date |\n"
+            "|-------|-----------|--------|------|\n"
+            f"| 1.0 | {author_name} | Initial Release | {today} |"
+        )
+        return {
+            "suggestion": canonical,
+            "section_key": section_key,
+            "instruction_used": f"Version 1.0, author = {author_name}, date = {today}",
+            "mode": "direct"
+        }
 
     mode_prompts = {
         "tighten": (
