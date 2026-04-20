@@ -218,3 +218,12 @@ async def get_draft(
         raise HTTPException(status_code=404, detail="Draft not found")
     
     return draft
+
+@router.delete("/drafts/{draft_id}")
+async def delete_draft(draft_id: int, db: Session = Depends(get_db)):
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    db.delete(draft)
+    db.commit()
+    return {"message": "Draft deleted", "id": draft_id}

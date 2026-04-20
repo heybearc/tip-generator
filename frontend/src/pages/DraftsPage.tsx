@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -31,6 +31,17 @@ export default function DraftsPage() {
       setError('Failed to load drafts')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDelete = async (e: { stopPropagation: () => void }, draftId: number) => {
+    e.stopPropagation()
+    if (!confirm('Delete this draft?')) return
+    try {
+      await axios.delete(`${API_URL}/generate/drafts/${draftId}`)
+      setDrafts(prev => prev.filter(d => d.id !== draftId))
+    } catch {
+      setError('Failed to delete draft')
     }
   }
 
@@ -105,11 +116,18 @@ export default function DraftsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass(draft.status)}`}>
                   {draft.status}
                 </span>
-                <span className="text-xs text-gray-400 text-right">→</span>
+                <button
+                  onClick={e => handleDelete(e, draft.id)}
+                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                  title="Delete draft"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-xs text-gray-400">→</span>
               </div>
             </div>
           ))}
