@@ -9,7 +9,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 from models.document import Document, DocumentType, DocumentStatus
 import openpyxl
-import PyMuPDF  # fitz
+import fitz  # PyMuPDF
 from docx import Document as DocxDocument
 
 class UploadService:
@@ -103,7 +103,7 @@ class UploadService:
     
     def _extract_from_pdf(self, file_path: Path) -> str:
         """Extract text from PDF file"""
-        doc = PyMuPDF.open(file_path)
+        doc = fitz.open(file_path)
         text_parts = []
         
         for page_num in range(len(doc)):
