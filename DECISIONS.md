@@ -68,12 +68,13 @@ When adding a decision, use this format:
 - **When:** 2026-04-20
 - **Consequences:** Must manually sync code to green when ready for deployment
 
-## D-LOCAL-005: deploy.sh script on each container
-- **Decision:** Each container has `/opt/tip-generator/deploy.sh` as the canonical deploy method
-- **Why:** Previous ad-hoc `git pull && cd frontend && npm run build` commands failed because shell context was lost between commands, causing stale builds. A single script in the repo root runs all steps in correct order.
+## D-LOCAL-005: deploy.sh as temporary bridge until MCP registration
+- **Decision:** `/opt/tip-generator/deploy.sh` on each container as a temporary deploy method
+- **Why:** TIP Generator is not yet registered in the homelab-blue-green-deployment MCP server. Standard pattern is `mcp0_deploy_to_standby app=tip-generator` but that requires MCP registration first.
 - **When:** 2026-04-20
-- **Usage:** `ssh tip-blue '/opt/tip-generator/deploy.sh'` or `ssh tip-green '/opt/tip-generator/deploy.sh'`
-- **Steps:** git pull → npm run build (frontend) → restart tip-generator → reload nginx → health check
+- **Temporary:** Yes - remove once TIP Generator is added to the MCP server
+- **Promotion:** See PROMOTE-TO-CONTROL-PLANE.md - MCP registration is tracked for control plane action
+- **Usage (until MCP ready):** `ssh tip-blue '/opt/tip-generator/deploy.sh'`
 
 ## D-LOCAL-006: SSH config covers bare IPs for both TIP containers
 - **Decision:** SSH config `Host` entries for CT190 and CT191 include the raw IP address as an alias, with `StrictHostKeyChecking accept-new` and `CheckHostIP no`
