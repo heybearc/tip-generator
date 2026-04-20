@@ -189,3 +189,38 @@ async def get_document(
         raise HTTPException(status_code=404, detail="Document not found")
     
     return document
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a document and its file
+    """
+    from models.document import Document
+    import os
+    
+    document = db.query(Document)\
+        .filter(
+            Document.id == document_id,
+            Document.user_id == TEMP_USER_ID
+        )\
+        .first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete the physical file
+    if document.file_path and os.path.exists(document.file_path):
+        try:
+            os.remove(document.file_path)
+        except Exception as e:
+            # Log but don't fail if file deletion fails
+            print(f"Warning: Could not delete file {document.file_path}: {e}")
+    
+    # Delete from database
+    db.delete(document)
+    db.commit()
+    
+    return {"message": "Document deleted successfully", "id": document_id}
