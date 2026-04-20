@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, FileText, Download, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Upload, FileText, Download, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -14,8 +14,35 @@ interface Template {
   created_at: string
 }
 
+interface TemplateStructure {
+  sections: Array<{
+    level: number
+    title: string
+    content: string
+    placeholders: string[]
+  }>
+  placeholders: Array<{
+    name: string
+    occurrences: number
+  }>
+  instructions: Array<{
+    text: string
+    section: string
+    type: string
+  }>
+  metadata: {
+    total_paragraphs: number
+    total_sections: number
+    total_placeholders: number
+    styles_used: string[]
+  }
+}
+
 export default function TemplateManagementPage() {
   const [currentTemplate, setCurrentTemplate] = useState<Template | null>(null)
+  const [templateStructure, setTemplateStructure] = useState<TemplateStructure | null>(null)
+  const [showStructure, setShowStructure] = useState(false)
+  const [loadingStructure, setLoadingStructure] = useState(false)
   const [history, setHistory] = useState<Template[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -103,6 +130,23 @@ export default function TemplateManagementPage() {
     window.open(`${API_URL}/templates/download/${templateId}`, '_blank')
   }
 
+  const loadTemplateStructure = async (templateId: number) => {
+    setLoadingStructure(true)
+    try {
+      const response = await axios.get(`${API_URL}/templates/${templateId}/structure`)
+      setTemplateStructure(response.data)
+      setShowStructure(true)
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setError('Template structure not available. Template may need to be re-uploaded.')
+      } else {
+        setError('Failed to load template structure')
+      }
+    } finally {
+      setLoadingStructure(false)
+    }
+  }
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -157,14 +201,112 @@ export default function TemplateManagementPage() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => handleDownload(currentTemplate.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => loadTemplateStructure(currentTemplate.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  disabled={loadingStructure}
+                >
+                  {showStructure ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  {loadingStructure ? 'Loading...' : 'View Structure'}
+                </button>
+                <button
+                  onClick={() => handleDownload(currentTemplate.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              </div>
             </div>
+
+            {/* Template Structure Preview */}
+            {showStructure && templateStructure && (
+              <div className="mt-6 border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Template Structure</h3>
+                
+                {/* Metadata Summary */}
+                <div className="grid grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{templateStructure.metadata.total_sections}</div>
+                    <div className="text-sm text-gray-600">Sections</div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{templateStructure.placeholders.length}</div>
+                    <div className="text-sm text-gray-600">Placeholders</div>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">{templateStructure.instructions.length}</div>
+                    <div className="text-sm text-gray-600">Instructions</div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-600">{templateStructure.metadata.total_paragraphs}</div>
+                    <div className="text-sm text-gray-600">Paragraphs</div>
+                  </div>
+                </div>
+
+                {/* Sections List */}
+                <div className="mb-6">
+                  <h4 className="font-semibold mb-3">Sections ({templateStructure.sections.length})</h4>
+                  <div className="max-h-96 overflow-y-auto border rounded-lg">
+                    {templateStructure.sections.map((section, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 border-b last:border-b-0 hover:bg-gray-50"
+                        style={{ paddingLeft: `${section.level * 1.5}rem` }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs font-mono text-gray-500">H{section.level}</span>
+                          <span className="font-medium">{section.title}</span>
+                        </div>
+                        {section.placeholders.length > 0 && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            Placeholders: {section.placeholders.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Placeholders */}
+                {templateStructure.placeholders.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="font-semibold mb-3">Placeholders ({templateStructure.placeholders.length})</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {templateStructure.placeholders.map((ph, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-mono"
+                        >
+                          {`{{${ph.name}}}`} ({ph.occurrences}x)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Instructions */}
+                {templateStructure.instructions.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-3">Claude Instructions ({templateStructure.instructions.length})</h4>
+                    <div className="space-y-2">
+                      {templateStructure.instructions.map((inst, idx) => (
+                        <div key={idx} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs px-2 py-0.5 bg-purple-200 text-purple-800 rounded">
+                              {inst.type}
+                            </span>
+                            <span className="text-xs text-gray-600">{inst.section}</span>
+                          </div>
+                          <div className="text-sm text-gray-700">{inst.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
