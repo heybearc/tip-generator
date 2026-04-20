@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle } from 'lucide-react'
 
 const API_URL = '/api'
 

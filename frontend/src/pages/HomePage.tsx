@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, Upload, Wand2, FolderOpen, Files, ArrowRight } from 'lucide-react'
+import { FileText, Upload, Wand2, FolderOpen, ArrowRight } from 'lucide-react'
 
 const API_URL = '/api'
 

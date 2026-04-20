@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, RefreshCw, Send, Loader2, CheckCircle, AlertCircle, Download } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download } from 'lucide-react'
 
 const API_URL = '/api'
 
