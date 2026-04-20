@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database.config import get_db
 from models.template_file import TemplateFile
-from schemas.template_file import TemplateFileResponse
+from schemas.template_file import TemplateFileResponse, TemplateFileUploadResponse
 from services.template_parser import parse_template_file
 from pathlib import Path
 import os
