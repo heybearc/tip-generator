@@ -10,11 +10,56 @@ from schemas.document import DocumentUploadResponse, DocumentResponse
 from services.upload import UploadService
 import os
 
-router = APIRouter(prefix="/api/upload", tags=["upload"])
+router = APIRouter(prefix="/api", tags=["upload"])
 upload_service = UploadService()
 
 # Temporary: hardcoded user_id until we implement auth
 TEMP_USER_ID = 1
+
+@router.post("/documents/upload", response_model=DocumentUploadResponse)
+async def upload_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Generic document upload endpoint - auto-detects document type
+    """
+    # Auto-detect document type based on file extension
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    
+    if file_ext in ['.xlsx', '.xls']:
+        document_type = DocumentType.DISCOVERY_EXCEL
+    elif file_ext == '.pdf':
+        document_type = DocumentType.SERVICE_ORDER_PDF
+    else:
+        document_type = DocumentType.OTHER
+    
+    # Validate file size (10MB max)
+    max_size = 10 * 1024 * 1024
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > max_size:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
+    
+    try:
+        document = await upload_service.save_upload(
+            file=file,
+            document_type=document_type,
+            user_id=TEMP_USER_ID,
+            db=db
+        )
+        
+        return DocumentUploadResponse(
+            message="File uploaded successfully",
+            document_id=document.id,
+            filename=document.filename,
+            file_type=document.document_type.value,
+            status=document.status
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.post("/discovery", response_model=DocumentUploadResponse)
 async def upload_discovery_document(
