@@ -25,6 +25,7 @@ class DraftResponse(BaseModel):
     sections: Optional[Dict[str, Any]] = None
     claude_model: Optional[str] = None
     generation_tokens: Optional[int] = None
+    generation_prompt: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     generated_at: Optional[datetime] = None

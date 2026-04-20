@@ -83,13 +83,18 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             service_order_doc = db.query(Document).filter(Document.id == draft.service_order_document_id).first()
 
         template_structure = None
+        # Use passed template_file_id or fall back to active template
+        tmpl = None
         if template_file_id:
             tmpl = db.query(TemplateFile).filter(TemplateFile.id == template_file_id).first()
-            if tmpl and tmpl.template_structure:
-                try:
-                    template_structure = json.loads(tmpl.template_structure)
-                except Exception:
-                    pass
+        if not tmpl:
+            tmpl = db.query(TemplateFile).filter(TemplateFile.is_active == True).first()
+        if tmpl and tmpl.template_structure:
+            try:
+                template_structure = json.loads(tmpl.template_structure)
+                template_file_id = tmpl.id
+            except Exception:
+                pass
 
         claude = ClaudeService()
         updated_draft = asyncio.run(
