@@ -19,6 +19,31 @@ When adding a decision, use this format:
 
 ---
 
+## D-LOCAL-001: Shared NFS storage for uploaded documents
+
+- **Decision:** Use TrueNAS NFS share (`10.92.0.3:/mnt/media-pool/tip-uploads`) mounted at `/mnt/tip-uploads` on both CT190 and CT191 for storing uploaded documents
+- **Why:** 
+  - Blue-green deployment requires both containers to access the same files
+  - Container-local storage (`/var/tmp`) doesn't persist across container rebuilds
+  - NFS provides shared, persistent storage without manual file syncing
+  - TrueNAS already provides enterprise-grade storage with RAIDZ1 redundancy
+- **When:** 2026-04-20
+- **Implementation:**
+  - TrueNAS dataset: `media-pool/tip-uploads` with LZ4 compression
+  - NFS share ID 19, allows 10.92.0.0/16 network, mapall to root:root
+  - Proxmox host mounts NFS at `/mnt/pve/tip-uploads` (in `/etc/fstab`)
+  - Both containers get bind mount via `pct set <vmid> -mp0 /mnt/pve/tip-uploads,mp=/mnt/tip-uploads`
+  - Backend service uses `/mnt/tip-uploads` as upload directory
+- **Alternatives considered:**
+  1. **PostgreSQL BYTEA storage** - Rejected: Poor performance for large files, bloats database
+  2. **Rsync between containers** - Rejected: Requires manual sync during deployments, race conditions
+  3. **S3-compatible object storage** - Rejected: Overkill for this use case, adds complexity
+  4. **Container-local storage** - Rejected: Files don't persist across blue-green switches
+- **Database:** File metadata (filename, path, extracted text) stored in PostgreSQL, actual files on NFS
+- **Monitoring:** TrueNAS pool health monitored via custom exporter on CT150:9200
+
+---
+
 ## D-LOCAL-001: FastAPI backend with React frontend
 - **Decision:** Use FastAPI (Python 3.11+) for backend API and React with Vite for frontend
 - **Why:** FastAPI provides excellent performance for document processing APIs, native async support, and automatic OpenAPI documentation. React with Vite offers fast development experience and modern build tooling.
