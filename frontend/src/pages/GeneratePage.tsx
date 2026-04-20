@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -31,6 +32,7 @@ interface CurrentTemplate {
 }
 
 export default function GeneratePage() {
+  const navigate = useNavigate()
   const [documents, setDocuments] = useState<Document[]>([])
   const [currentTemplate, setCurrentTemplate] = useState<CurrentTemplate | null>(null)
   const [discoveryDocId, setDiscoveryDocId] = useState<number | null>(null)
@@ -84,25 +86,11 @@ export default function GeneratePage() {
       })
       const draftId = createRes.data.id
 
-      // 2. Start generation (returns immediately, runs in background)
+      // 2. Enqueue generation (returns immediately)
       await axios.post(`${API_URL}/generate/tip`, { draft_id: draftId })
 
-      // 3. Poll until completed or failed (up to 10 minutes)
-      let attempts = 0
-      while (attempts < 120) {
-        await new Promise(r => setTimeout(r, 5000)) // wait 5s between polls
-        const pollRes = await axios.get(`${API_URL}/generate/drafts/${draftId}`)
-        const polledDraft = pollRes.data
-        if (polledDraft.status === 'completed' || polledDraft.status === 'failed') {
-          setDraft(polledDraft)
-          if (polledDraft.status === 'failed') {
-            setError(polledDraft.content || 'Generation failed')
-          }
-          return
-        }
-        attempts++
-      }
-      setError('Generation timed out — check Drafts page for status')
+      // 3. Task is queued — redirect to Drafts to track progress
+      navigate(`/drafts`)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Generation failed')
     } finally {
