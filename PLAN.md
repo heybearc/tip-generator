@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-20  
-**Current phase:** Phase 1 Testing — first real end-to-end run  
-**Status:** Phases 1.1–1.5 complete, testing before Phase 1.6 (export)
+**Current phase:** Active refinement — template-guided editing, export polish  
+**Status:** Phases 1.1–1.6 complete; working on document quality and auth
 
 ---
 
@@ -94,6 +94,7 @@
 - **Generation progress UX** (Phase 1.7) — chunked runs take 2-4 min with no feedback
 - **Word/PDF export** (Phase 1.6) — core deliverable
 - **Authentication** — Authentik OAuth2/OIDC, protected routes, user sessions
+  - ⚠️ **Revision History author name** currently hardcoded to `full_name` of DB user ID 1 (`"TIP Generator Admin"`). Once auth is wired, `author_name` will pull from the logged-in user automatically — no code change needed, just real user records in the DB.
 - **Excel parser tuning** — validate against real discovery workbooks, handle edge cases (merged cells, dropdowns, nested tables)
 
 ### Medium Priority
@@ -115,8 +116,9 @@
 
 ## Known Issues / Watch Items
 - Chunked generation has no UI progress feedback (Phase 1.7)
-- Export button on DraftViewPage is visible but non-functional until Phase 1.6
-- AI Assist refine call is synchronous — large TIPs may take 30-60s with spinner only
+- AI Assist was silently timing out (sync Claude call blocking async event loop) — **fixed 2026-04-20** via ThreadPoolExecutor
+- Revision History was pulling date from discovery doc instead of server date — **fixed 2026-04-20** (deterministic post-process on generation + refine)
+- **Revision History author** shows `"TIP Generator Admin"` until real auth is implemented — blocked on Authentication phase
 - Excel merged cells not handled (openpyxl `data_only=True` limitation)
 - SSH host key churn on CT190/CT191 after Proxmox maintenance — auto-handled by SSH config now
 - TIP Generator not yet registered in MCP server — tracked in PROMOTE-TO-CONTROL-PLANE.md
