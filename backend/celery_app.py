@@ -24,7 +24,35 @@ celery.conf.update(
     worker_prefetch_multiplier=1,        # One task at a time per worker
     task_acks_late=True,                 # Ack only after task completes (safe retry on crash)
     task_reject_on_worker_lost=True,     # Re-queue if worker dies mid-task
+    broker_connection_retry_on_startup=True,
 )
+
+
+@celery.on_after_configure.connect
+def recover_orphaned_drafts(sender, **kwargs):
+    """
+    On worker startup, find any drafts stuck in 'generating' state and re-queue them.
+    This handles the case where the worker was restarted mid-generation.
+    Runs once per worker process startup.
+    """
+    try:
+        from database import SessionLocal
+        from models.draft import Draft, DraftStatus
+        db = SessionLocal()
+        try:
+            orphans = db.query(Draft).filter(Draft.status == DraftStatus.GENERATING).all()
+            if orphans:
+                print(f"[startup] Found {len(orphans)} orphaned generating draft(s) — re-queuing...")
+                for draft in orphans:
+                    draft.status = DraftStatus.GENERATING  # keep status, reset progress
+                    draft.generation_prompt = None
+                    db.commit()
+                    generate_tip_task.delay(draft.id, draft.template_file_id)
+                    print(f"[startup] Re-queued draft {draft.id}: {draft.title}")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[startup] Orphan recovery failed: {e}")
 
 
 @celery.task(bind=True, name="generate_tip", max_retries=1)
