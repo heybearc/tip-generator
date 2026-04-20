@@ -544,14 +544,18 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         shd.set(qn('w:fill'), hex_color)
         tcPr.append(shd)
 
+    # Pre-compute available style names once
+    _available_styles = {s.name for s in doc.styles}
+
+    def safe_style(name: str, fallback: str = 'Normal') -> str:
+        return name if name in _available_styles else fallback
+
     def add_heading(text: str, level: int):
         """Add a heading using the template's built-in Heading styles."""
-        style_name = f'Heading {level}'
-        try:
-            p = doc.add_paragraph(text, style=style_name)
-        except Exception:
-            # Fallback if style not available
-            p = doc.add_paragraph(text)
+        style_name = safe_style(f'Heading {level}')
+        p = doc.add_paragraph(text, style=style_name)
+        if style_name == 'Normal':
+            # Manual styling if Heading style not in template
             run = p.runs[0] if p.runs else p.add_run(text)
             sizes = {1: Pt(14), 2: Pt(12), 3: Pt(11)}
             run.font.size = sizes.get(level, Pt(11))
@@ -680,18 +684,21 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         # Bullet / checklist
         if line.startswith('- [ ] ') or line.startswith('[ ] '):
             text = line.lstrip('- ').lstrip('[ ] ').strip()
-            p = doc.add_paragraph(style='List Bullet')
+            p = doc.add_paragraph(style=safe_style('List Bullet'))
+            p.paragraph_format.left_indent = Inches(0.25)
             p.add_run(f'☐  {text}')
             i += 1
             continue
         if line.startswith('- [x] ') or line.startswith('[x] '):
             text = line.lstrip('- ').lstrip('[x] ').strip()
-            p = doc.add_paragraph(style='List Bullet')
+            p = doc.add_paragraph(style=safe_style('List Bullet'))
+            p.paragraph_format.left_indent = Inches(0.25)
             p.add_run(f'☑  {text}')
             i += 1
             continue
         if line.startswith('- ') or line.startswith('* '):
-            p = doc.add_paragraph(style='List Bullet')
+            p = doc.add_paragraph(style=safe_style('List Bullet'))
+            p.paragraph_format.left_indent = Inches(0.25)
             add_inline_runs(p, line[2:])
             i += 1
             continue
@@ -699,7 +706,8 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         # Numbered list  (1. text)
         num_match = re.match(r'^(\d+)\.\s+(.+)$', line)
         if num_match:
-            p = doc.add_paragraph(style='List Number')
+            p = doc.add_paragraph(style=safe_style('List Number'))
+            p.paragraph_format.left_indent = Inches(0.25)
             add_inline_runs(p, num_match.group(2))
             i += 1
             continue
