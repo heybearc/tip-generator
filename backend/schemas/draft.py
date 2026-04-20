@@ -32,6 +32,11 @@ class DraftResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DraftUpdate(BaseModel):
+    """Schema for updating a draft's content"""
+    content: str
+    title: Optional[str] = None
+
 class GenerateTIPRequest(BaseModel):
     """Request to generate a TIP"""
     draft_id: int
@@ -42,3 +47,12 @@ class GenerateTIPResponse(BaseModel):
     draft_id: int
     status: DraftStatus
     content: Optional[str] = None
+
+class RefineRequest(BaseModel):
+    """Request to refine a draft with Claude"""
+    instruction: str
+    current_content: Optional[str] = None
+
+class RefineResponse(BaseModel):
+    """Response from Claude refinement"""
+    suggestion: str

@@ -9,7 +9,7 @@ from database import get_db
 from models.draft import Draft, DraftStatus
 from models.document import Document
 from models.template_file import TemplateFile
-from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, GenerateTIPResponse
+from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, GenerateTIPResponse, DraftUpdate, RefineRequest, RefineResponse
 from services.claude import ClaudeService
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -151,6 +151,42 @@ async def list_drafts(
         .all()
     
     return drafts
+
+@router.patch("/drafts/{draft_id}", response_model=DraftResponse)
+async def update_draft(
+    draft_id: int,
+    update: DraftUpdate,
+    db: Session = Depends(get_db)
+):
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    draft.content = update.content
+    if update.title:
+        draft.title = update.title
+    db.commit()
+    db.refresh(draft)
+    return draft
+
+@router.post("/drafts/{draft_id}/refine", response_model=RefineResponse)
+async def refine_draft(
+    draft_id: int,
+    request: RefineRequest,
+    db: Session = Depends(get_db)
+):
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    try:
+        claude_service = get_claude_service()
+        content = request.current_content or draft.content or ""
+        suggestion = await claude_service.refine_tip(
+            instruction=request.instruction,
+            current_content=content
+        )
+        return RefineResponse(suggestion=suggestion)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 
 @router.get("/drafts/{draft_id}", response_model=DraftResponse)
 async def get_draft(
