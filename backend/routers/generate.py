@@ -563,6 +563,8 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     def add_list_paragraph(text: str, is_ordered: bool = False, level: int = 0):
         """Add a properly formatted bullet or numbered list paragraph."""
         p = doc.add_paragraph(style='List Paragraph')
+        p.paragraph_format.space_before = Pt(2)
+        p.paragraph_format.space_after = Pt(4)
         num_id = _get_or_create_numbering(is_ordered)
         if num_id is not None:
             pPr = p._p.get_or_add_pPr()
@@ -623,19 +625,22 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
     # Strip [INSTRUCTION: ...] blocks (may span multiple lines)
     content = re.sub(r'\[INSTRUCTION:.*?\]', '', draft.content, flags=re.DOTALL)
-    # Strip Document Control Notice block (> blockquote lines at top)
+    # Strip Document Control Notice block (> blockquote lines)
+    content = re.sub(r'(?:^> .*\n)+', '', content, flags=re.MULTILINE)
+    # Strip standalone DOCUMENT CONTROL NOTICE paragraph
     content = re.sub(
-        r'(?:^> .*\n)+',
-        '',
-        content,
-        flags=re.MULTILINE
+        r'^\*{0,2}DOCUMENT CONTROL NOTICE\*{0,2}\n(?:.*\n)*?(?=\n#{1,3}|\n\n#{1,3})',
+        '', content, flags=re.MULTILINE
     )
-    # Also strip any standalone DOCUMENT CONTROL NOTICE heading/paragraph
+    # Strip Service Order callout lines (bold header + value lines at top of doc)
     content = re.sub(
-        r'^\*{0,2}DOCUMENT CONTROL NOTICE\*{0,2}\n(?:.*\n)*?(?=\n#|\n\n#)',
-        '',
-        content,
-        flags=re.MULTILINE
+        r'^\*\*Service Order:\*\*.*$', '', content, flags=re.MULTILINE
+    )
+    content = re.sub(
+        r'^\*\*Prepared by:\*\*.*$', '', content, flags=re.MULTILINE
+    )
+    content = re.sub(
+        r'^\*\*Date:\*\*.*$', '', content, flags=re.MULTILINE
     )
     # Collapse runs of 3+ blank lines to 2
     content = re.sub(r'\n{3,}', '\n\n', content)
