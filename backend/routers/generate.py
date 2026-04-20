@@ -406,11 +406,12 @@ Rewrite this section following the rules above."""
 async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     """Export a completed draft as a formatted Word (.docx) document."""
     from docx import Document as DocxDocument
-    from docx.shared import Pt, RGBColor, Inches
+    from docx.shared import Pt, RGBColor, Inches, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
-    import re
+    from docx.enum.style import WD_STYLE_TYPE
+    import re, copy
 
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
     if not draft:
@@ -420,7 +421,19 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
     import os
 
-    doc = DocxDocument()
+    # Start from the actual template so heading styles are inherited correctly
+    template_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'Thrive_TIP_Template.docx'))
+    if os.path.exists(template_path):
+        doc = DocxDocument(template_path)
+        # Clear all body content from template — keep styles/header/footer
+        for para in list(doc.paragraphs):
+            p = para._element
+            p.getparent().remove(p)
+        for tbl in list(doc.tables):
+            t = tbl._element
+            t.getparent().remove(t)
+    else:
+        doc = DocxDocument()
 
     # Page margins
     for sec in doc.sections:
@@ -531,21 +544,20 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         shd.set(qn('w:fill'), hex_color)
         tcPr.append(shd)
 
-    def set_heading_style(para, level: int):
-        """Apply Thrive brand heading colors."""
-        run = para.runs[0] if para.runs else para.add_run()
-        if level == 1:
-            run.font.size = Pt(14)
+    def add_heading(text: str, level: int):
+        """Add a heading using the template's built-in Heading styles."""
+        style_name = f'Heading {level}'
+        try:
+            p = doc.add_paragraph(text, style=style_name)
+        except Exception:
+            # Fallback if style not available
+            p = doc.add_paragraph(text)
+            run = p.runs[0] if p.runs else p.add_run(text)
+            sizes = {1: Pt(14), 2: Pt(12), 3: Pt(11)}
+            run.font.size = sizes.get(level, Pt(11))
             run.font.bold = True
             run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
-        elif level == 2:
-            run.font.size = Pt(12)
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
-        elif level == 3:
-            run.font.size = Pt(11)
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(0x14, 0x3E, 0x69)
+        return p
 
     def add_horizontal_rule(doc):
         p = doc.add_paragraph()
@@ -574,11 +586,39 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     sub_run.font.color.rgb = RGBColor(0x8C, 0x9A, 0x9E)
     doc.add_paragraph()
 
-    # Parse and render content
-    lines = draft.content.split('\n')
+    def flush_table(tbl_lines):
+        rows = [l for l in tbl_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
+        if not rows:
+            return
+        cols = max(len(r.strip('|').split('|')) for r in rows)
+        t = doc.add_table(rows=0, cols=max(cols, 1))
+        t.style = 'Table Grid'
+        for ri, row_line in enumerate(rows):
+            cells = [c.strip() for c in row_line.strip('|').split('|')]
+            tr = t.add_row()
+            for ci in range(max(cols, 1)):
+                cell_text = cells[ci] if ci < len(cells) else ''
+                cell_obj = tr.cells[ci]
+                cell_obj.text = ''
+                cell_para = cell_obj.paragraphs[0]
+                add_inline_runs(cell_para, cell_text, base_size=Pt(10))
+                if ri == 0:
+                    shade_cell(cell_obj, '143F6A')
+                    for r in cell_para.runs:
+                        r.font.bold = True
+                        r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                        r.font.size = Pt(10)
+                else:
+                    cell_para.paragraph_format.space_after = Pt(2)
+
+    # Strip [INSTRUCTION: ...] lines (single or multi-line)
+    content = re.sub(r'\[INSTRUCTION:[^\]]*\]', '', draft.content, flags=re.DOTALL)
+    # Collapse runs of 3+ blank lines to 2
+    content = re.sub(r'\n{3,}', '\n\n', content)
+
+    lines = content.split('\n')
     i = 0
     table_lines = []
-    in_table = False
 
     while i < len(lines):
         line = lines[i]
@@ -589,27 +629,14 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             i += 1
             continue
         elif table_lines:
-            # Flush table
-            rows = [l for l in table_lines if not re.match(r'^\ *\|[-| :]+\|\s*$', l)]
-            if rows:
-                cols = len(rows[0].split('|')) - 2
-                t = doc.add_table(rows=0, cols=max(cols, 1))
-                t.style = 'Table Grid'
-                for ri, row_line in enumerate(rows):
-                    cells = [c.strip() for c in row_line.strip('|').split('|')]
-                    tr = t.add_row()
-                    for ci, cell_text in enumerate(cells[:max(cols, 1)]):
-                        cell_obj = tr.cells[ci]
-                        cell_obj.text = ''
-                        cell_para = cell_obj.paragraphs[0]
-                        add_inline_runs(cell_para, cell_text)
-                        if ri == 0:
-                            shade_cell(cell_obj, '143F6A')
-                            for r in cell_para.runs:
-                                r.font.bold = True
-                                r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            flush_table(table_lines)
             table_lines = []
-            # Don't skip current line
+            # fall through to process current line
+
+        # Skip instruction remnants
+        if re.match(r'^\[INSTRUCTION:', line.strip()):
+            i += 1
+            continue
 
         # Blockquote / callout
         if line.startswith('> '):
@@ -630,21 +657,17 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             i += 1
             continue
 
-        # Headings
-        if line.startswith('# '):
-            p = doc.add_paragraph(line[2:])
-            set_heading_style(p, 1)
-            add_horizontal_rule(doc)
+        # Headings — use proper Word Heading styles from template
+        if line.startswith('### '):
+            add_heading(line[4:].strip(), 3)
             i += 1
             continue
         if line.startswith('## '):
-            p = doc.add_paragraph(line[3:])
-            set_heading_style(p, 2)
+            add_heading(line[3:].strip(), 2)
             i += 1
             continue
-        if line.startswith('### '):
-            p = doc.add_paragraph(line[4:])
-            set_heading_style(p, 3)
+        if line.startswith('# '):
+            add_heading(line[2:].strip(), 1)
             i += 1
             continue
 
@@ -673,36 +696,30 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             i += 1
             continue
 
+        # Numbered list  (1. text)
+        num_match = re.match(r'^(\d+)\.\s+(.+)$', line)
+        if num_match:
+            p = doc.add_paragraph(style='List Number')
+            add_inline_runs(p, num_match.group(2))
+            i += 1
+            continue
+
         # Blank line
         if line.strip() == '':
             i += 1
             continue
 
-        # Normal paragraph
+        # Normal paragraph — Calibri 11pt matching template body
         p = doc.add_paragraph()
-        add_inline_runs(p, line)
+        add_inline_runs(p, line, base_size=Pt(11))
+        for run in p.runs:
+            if not run.font.name:
+                run.font.name = 'Calibri'
         i += 1
 
     # Flush any trailing table
     if table_lines:
-        rows = [l for l in table_lines if not re.match(r'^\s*\|[-| :]+\|\s*$', l)]
-        if rows:
-            cols = len(rows[0].split('|')) - 2
-            t = doc.add_table(rows=0, cols=max(cols, 1))
-            t.style = 'Table Grid'
-            for ri, row_line in enumerate(rows):
-                cells = [c.strip() for c in row_line.strip('|').split('|')]
-                tr = t.add_row()
-                for ci, cell_text in enumerate(cells[:max(cols, 1)]):
-                    cell_obj = tr.cells[ci]
-                    cell_obj.text = ''
-                    cell_para = cell_obj.paragraphs[0]
-                    add_inline_runs(cell_para, cell_text)
-                    if ri == 0:
-                        shade_cell(cell_obj, '143F6A')
-                        for r in cell_para.runs:
-                            r.font.bold = True
-                            r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        flush_table(table_lines)
 
     buf = io.BytesIO()
     doc.save(buf)
