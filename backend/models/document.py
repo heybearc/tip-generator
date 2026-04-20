@@ -31,7 +31,7 @@ class Document(Base):
     document_type = Column(Enum(DocumentType), nullable=False)
     status = Column(Enum(DocumentStatus), default=DocumentStatus.UPLOADING)
     extracted_text = Column(Text, nullable=True)  # Extracted content from document
-    metadata = Column(Text, nullable=True)  # JSON string for additional metadata
+    doc_metadata = Column(Text, nullable=True)  # JSON string for additional metadata
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     processed_at = Column(DateTime(timezone=True), nullable=True)
