@@ -151,6 +151,30 @@ async def upload_service_order(
         status=document.status
     )
 
+@router.get("/documents/{document_id}/extracted-text")
+async def get_extracted_text(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Preview the extracted text for a document — useful for verifying
+    Excel parsing quality before generating a TIP.
+    """
+    from models.document import Document
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == TEMP_USER_ID
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {
+        "id": document.id,
+        "filename": document.original_filename,
+        "document_type": document.document_type,
+        "extracted_text": document.extracted_text,
+        "char_count": len(document.extracted_text) if document.extracted_text else 0
+    }
+
 @router.get("/documents", response_model=List[DocumentResponse])
 async def list_documents(
     db: Session = Depends(get_db),
