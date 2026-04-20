@@ -1,17 +1,17 @@
 """
 TIP generation API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
-import asyncio
 from database import get_db
 from models.draft import Draft, DraftStatus
 from models.document import Document
 from models.template_file import TemplateFile
 from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, GenerateTIPResponse, DraftUpdate, RefineRequest, RefineResponse
 from services.claude import ClaudeService
+from celery_app import generate_tip_task
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
@@ -64,63 +64,13 @@ async def create_draft(
     
     return draft
 
-async def _run_generation(draft_id: int, template_file_id: Optional[int]):
-    """Background task: run Claude generation without blocking the request thread."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        draft = db.query(Draft).filter(Draft.id == draft_id).first()
-        if not draft:
-            return
-
-        discovery_doc = None
-        service_order_doc = None
-        if draft.discovery_document_id:
-            discovery_doc = db.query(Document).filter(Document.id == draft.discovery_document_id).first()
-        if draft.service_order_document_id:
-            service_order_doc = db.query(Document).filter(Document.id == draft.service_order_document_id).first()
-
-        template_structure = None
-        if template_file_id:
-            active_template = db.query(TemplateFile).filter(TemplateFile.id == template_file_id).first()
-            if active_template and active_template.template_structure:
-                try:
-                    template_structure = json.loads(active_template.template_structure)
-                except Exception:
-                    pass
-
-        claude_service = get_claude_service()
-        updated_draft = await claude_service.generate_tip(
-            draft=draft,
-            discovery_doc=discovery_doc,
-            service_order_doc=service_order_doc,
-            db=db,
-            template_structure=template_structure
-        )
-        if template_file_id:
-            updated_draft.template_file_id = template_file_id
-            db.commit()
-    except Exception as e:
-        try:
-            draft = db.query(Draft).filter(Draft.id == draft_id).first()
-            if draft:
-                draft.status = DraftStatus.FAILED
-                draft.content = f"Generation failed: {str(e)}"
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
-
-
 @router.post("/tip", response_model=GenerateTIPResponse)
 async def generate_tip(
     request: GenerateTIPRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Start TIP generation as a background task and return immediately.
+    Enqueue TIP generation as a Celery task and return immediately.
     Poll GET /drafts/{id} to check status (generating → completed/failed).
     """
     draft = db.query(Draft).filter(
@@ -130,16 +80,13 @@ async def generate_tip(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
-    # Load active template ID before handing off to background
     active_template = db.query(TemplateFile).filter(TemplateFile.is_active == True).first()
     template_file_id = active_template.id if active_template else None
 
-    # Mark as generating immediately
     draft.status = DraftStatus.GENERATING
     db.commit()
 
-    # Fire off background task — returns instantly to the client
-    background_tasks.add_task(_run_generation, draft.id, template_file_id)
+    generate_tip_task.delay(draft.id, template_file_id)
 
     return GenerateTIPResponse(
         message="TIP generation started",

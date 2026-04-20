@@ -1,0 +1,17 @@
+[Unit]
+Description=TIP Generator Celery Worker
+After=network.target postgresql.service redis.service tip-generator.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/tip-generator/backend
+Environment="PATH=/opt/tip-generator/backend/venv/bin"
+ExecStart=/opt/tip-generator/backend/venv/bin/celery -A celery_app worker --loglevel=info --concurrency=2 -n tip-worker@%%h
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
