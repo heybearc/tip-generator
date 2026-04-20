@@ -30,3 +30,15 @@ When adding a decision, use this format:
 - **Why:** FastAPI convention is port 8000. Deviating from global port standard (3001) is acceptable for non-Next.js apps.
 - **When:** 2026-04-19
 - **Note:** This is an exception to D-001 (port standardization) which applies to Next.js apps only
+
+## D-LOCAL-003: Claude Sonnet 4.6 for TIP generation
+- **Decision:** Use Claude Sonnet 4.6 (latest) instead of Claude 3.5 Sonnet for AI-powered TIP generation
+- **Why:** Sonnet 4.6 is the newest model (2026) with improved intelligence, better structured output, and superior technical writing capabilities. Same pricing tier as 3.5 Sonnet but significantly better quality.
+- **When:** 2026-04-20 (mid-day update)
+- **Alternatives considered:** Opus 4.7 (too expensive for standard use), Haiku 4.5 (too fast/cheap, lower quality), 3.5 Sonnet (outdated)
+
+## D-LOCAL-004: Blue-only development, green as standby
+- **Decision:** Develop and test exclusively on CT190 (blue), keep CT191 (green) as standby for blue-green deployment
+- **Why:** Faster iteration during development. Deploy to green only when features are stable and ready for production traffic switching.
+- **When:** 2026-04-20
+- **Consequences:** Must manually sync code to green when ready for deployment
