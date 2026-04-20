@@ -533,85 +533,94 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
         return p
 
-    def _get_or_create_numbering(is_ordered: bool) -> str:
-        """
-        Ensure an abstractNum + num definition exists in the document for
-        bullets (unordered) or decimal (ordered). Returns the numId string.
-        Stores created IDs on the doc object to avoid duplicates.
-        """
-        attr = '_bullet_num_id' if not is_ordered else '_ordered_num_id'
-        if hasattr(doc, attr):
-            return getattr(doc, attr)
+    # Numbering state — tracked across list items
+    _numbering_el = None
+    try:
+        _numbering_el = doc.part.numbering_part._element
+    except Exception:
+        pass
 
-        from docx.oxml import OxmlElement as OE
-        from docx.oxml.ns import qn as QN
-        body = doc.element.body
-        # Find or create w:numbering part
-        try:
-            numbering_part = doc.part.numbering_part
-            numbering_el = numbering_part._element
-        except Exception:
-            # Create numbering part inline via XML — attach to body's parent
-            numbering_el = None
+    # abstractNum IDs created once per type (reused by all num entries)
+    _abstract_ids = {}
 
-        if numbering_el is None:
-            # Fall back: use List Paragraph style with manual bullet char
-            setattr(doc, attr, None)
+    def _ensure_abstract_num(is_ordered: bool) -> str:
+        """Create abstractNum definition once per list type. Returns abstractNumId."""
+        key = 'ordered' if is_ordered else 'bullet'
+        if key in _abstract_ids:
+            return _abstract_ids[key]
+        if _numbering_el is None:
             return None
-
-        # Find next available abstractNumId and numId
-        existing_abstract = numbering_el.findall(qn('w:abstractNum'))
-        abstract_id = str(len(existing_abstract))
-        existing_nums = numbering_el.findall(qn('w:num'))
-        num_id = str(len(existing_nums) + 1)
-
-        # Build abstractNum
-        abstract_num = OE('w:abstractNum')
-        abstract_num.set(qn('w:abstractNumId'), abstract_id)
-        # multiLevelType
-        mlt = OE('w:multiLevelType')
-        mlt.set(qn('w:val'), 'hybridMultilevel')
-        abstract_num.append(mlt)
-        # level 0
-        lvl = OE('w:lvl')
-        lvl.set(qn('w:ilvl'), '0')
+        from docx.oxml import OxmlElement as OE
+        existing = _numbering_el.findall(qn('w:abstractNum'))
+        abstract_id = str(len(existing))
+        an = OE('w:abstractNum')
+        an.set(qn('w:abstractNumId'), abstract_id)
+        mlt = OE('w:multiLevelType'); mlt.set(qn('w:val'), 'hybridMultilevel'); an.append(mlt)
+        lvl = OE('w:lvl'); lvl.set(qn('w:ilvl'), '0')
         start = OE('w:start'); start.set(qn('w:val'), '1'); lvl.append(start)
         if is_ordered:
-            numfmt = OE('w:numFmt'); numfmt.set(qn('w:val'), 'decimal'); lvl.append(numfmt)
-            lvltext = OE('w:lvlText'); lvltext.set(qn('w:val'), '%1.'); lvl.append(lvltext)
+            nf = OE('w:numFmt'); nf.set(qn('w:val'), 'decimal'); lvl.append(nf)
+            lt = OE('w:lvlText'); lt.set(qn('w:val'), '%1.'); lvl.append(lt)
         else:
-            numfmt = OE('w:numFmt'); numfmt.set(qn('w:val'), 'bullet'); lvl.append(numfmt)
-            lvltext = OE('w:lvlText'); lvltext.set(qn('w:val'), '\u2022'); lvl.append(lvltext)
-        lvlJc = OE('w:lvlJc'); lvlJc.set(qn('w:val'), 'left'); lvl.append(lvlJc)
-        pPrL = OE('w:pPr')
-        ind = OE('w:ind')
-        ind.set(qn('w:left'), '720')   # 0.5 inch
-        ind.set(qn('w:hanging'), '360')  # 0.25 inch
-        pPrL.append(ind); lvl.append(pPrL)
-        rPrL = OE('w:rPr')
-        rFont = OE('w:rFonts')
-        rFont.set(qn('w:ascii'), 'Calibri')
-        rFont.set(qn('w:hAnsi'), 'Calibri')
-        rPrL.append(rFont); lvl.append(rPrL)
-        abstract_num.append(lvl)
-        numbering_el.append(abstract_num)
+            nf = OE('w:numFmt'); nf.set(qn('w:val'), 'bullet'); lvl.append(nf)
+            lt = OE('w:lvlText'); lt.set(qn('w:val'), '\u2022'); lvl.append(lt)
+        lj = OE('w:lvlJc'); lj.set(qn('w:val'), 'left'); lvl.append(lj)
+        pp = OE('w:pPr'); ind = OE('w:ind')
+        ind.set(qn('w:left'), '720'); ind.set(qn('w:hanging'), '360')
+        pp.append(ind); lvl.append(pp)
+        rp = OE('w:rPr'); rf = OE('w:rFonts')
+        rf.set(qn('w:ascii'), 'Calibri'); rf.set(qn('w:hAnsi'), 'Calibri')
+        rp.append(rf); lvl.append(rp)
+        an.append(lvl)
+        _numbering_el.append(an)
+        _abstract_ids[key] = abstract_id
+        return abstract_id
 
-        # Build num referencing abstractNum
-        num_el = OE('w:num')
-        num_el.set(qn('w:numId'), num_id)
-        abstract_ref = OE('w:abstractNumId')
-        abstract_ref.set(qn('w:val'), abstract_id)
-        num_el.append(abstract_ref)
-        numbering_el.append(num_el)
-
-        setattr(doc, attr, num_id)
+    def _new_num_id(is_ordered: bool) -> str:
+        """Create a new w:num entry (= new list instance, counter resets to 1)."""
+        abstract_id = _ensure_abstract_num(is_ordered)
+        if abstract_id is None or _numbering_el is None:
+            return None
+        from docx.oxml import OxmlElement as OE
+        existing = _numbering_el.findall(qn('w:num'))
+        num_id = str(len(existing) + 1)
+        num_el = OE('w:num'); num_el.set(qn('w:numId'), num_id)
+        ref = OE('w:abstractNumId'); ref.set(qn('w:val'), abstract_id)
+        num_el.append(ref)
+        _numbering_el.append(num_el)
         return num_id
+
+    # Track list continuity: reuse numId while in same list, reset when broken
+    _cur_ordered_id = [None]   # mutable via closure
+    _cur_bullet_id = [None]
+    _last_was_ordered = [False]
+    _last_was_bullet = [False]
+
+    def _get_list_num_id(is_ordered: bool) -> str:
+        """Return numId for current list group; create new one if list was interrupted."""
+        if is_ordered:
+            if not _last_was_ordered[0] or _cur_ordered_id[0] is None:
+                _cur_ordered_id[0] = _new_num_id(True)
+            _last_was_ordered[0] = True
+            _last_was_bullet[0] = False
+            return _cur_ordered_id[0]
+        else:
+            if _cur_bullet_id[0] is None:
+                _cur_bullet_id[0] = _new_num_id(False)
+            _last_was_bullet[0] = True
+            _last_was_ordered[0] = False
+            return _cur_bullet_id[0]
+
+    def _break_list():
+        """Call when a non-list element is rendered — signals list interruption."""
+        _last_was_ordered[0] = False
+        _last_was_bullet[0] = False
 
     def add_list_paragraph(text: str, is_ordered: bool = False, level: int = 0):
         """Add a properly formatted bullet or numbered list paragraph."""
         p = doc.add_paragraph(style='List Paragraph')
         set_para_spacing(p, before=0, after=40)
-        num_id = _get_or_create_numbering(is_ordered)
+        num_id = _get_list_num_id(is_ordered)
         if num_id is not None:
             pPr = p._p.get_or_add_pPr()
             numPr = OxmlElement('w:numPr')
@@ -625,7 +634,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         else:
             p.paragraph_format.left_indent = Inches(0.5)
             p.paragraph_format.first_line_indent = Inches(-0.25)
-            prefix = '1. ' if is_ordered else '\u2022  '
+            prefix = f'{text[:2]}' if is_ordered else '\u2022  '
             text = prefix + text
         add_inline_runs(p, text, base_size=Pt(10.5))
         for r in p.runs:
@@ -721,6 +730,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         elif table_lines:
             flush_table(table_lines)
             table_lines = []
+            _break_list()
             # fall through to process current line
 
         # Skip instruction remnants
@@ -730,6 +740,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
         # Blockquote / callout
         if line.startswith('> '):
+            _break_list()
             p = doc.add_paragraph()
             p.paragraph_format.left_indent = Inches(0.4)
             pPr = p._p.get_or_add_pPr()
@@ -749,20 +760,24 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
         # Headings — use proper Word Heading styles from template
         if line.startswith('### '):
+            _break_list()
             add_heading(line[4:].strip(), 3)
             i += 1
             continue
         if line.startswith('## '):
+            _break_list()
             add_heading(line[3:].strip(), 2)
             i += 1
             continue
         if line.startswith('# '):
+            _break_list()
             add_heading(line[2:].strip(), 1)
             i += 1
             continue
 
         # Horizontal rule
         if line.strip() in ('---', '***', '___'):
+            _break_list()
             add_horizontal_rule(doc)
             i += 1
             continue
@@ -789,6 +804,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             continue
 
         # Normal paragraph — 10.5pt Calibri #222 with precise spacing
+        _break_list()
         p = doc.add_paragraph()
         set_para_spacing(p, before=0, after=80)
         add_inline_runs(p, line, base_size=Pt(10.5))
