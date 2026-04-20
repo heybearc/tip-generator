@@ -2,8 +2,14 @@
 TIP Generator - FastAPI Backend
 AI-powered Technical Implementation Plan generator
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from database import Base, engine, get_db
+import os
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="TIP Generator API",
@@ -12,9 +18,10 @@ app = FastAPI(
 )
 
 # Configure CORS
+cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly in production
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,11 +45,21 @@ async def health_check():
     }
 
 @app.get("/api/health")
-async def api_health_check():
-    """API health check endpoint"""
+async def api_health(db: Session = Depends(get_db)):
+    """
+    Health check with database connectivity test
+    """
+    try:
+        # Test database connection
+        db.execute("SELECT 1")
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
     return {
         "status": "healthy",
-        "api_version": "v1"
+        "api_version": "v1",
+        "database": db_status
     }
 
 if __name__ == "__main__":
