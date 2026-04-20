@@ -214,7 +214,18 @@ class ClaudeService:
             "for a Managed Service Provider. Use ONLY facts from the source documents below. "
             "Where data is missing write [DATA NEEDED: description]. "
             f"This is part {chunk_index + 1} of {total_chunks} — generate ONLY the sections listed.\n\n"
+            "CRITICAL RULES:\n"
+            "- Do NOT generate a 'Risk Register' section — it is not part of this template.\n"
+            "- Risks and Contingencies sections MUST be a 4-column markdown table: "
+            "| Risk | Likelihood | Mitigation Strategy | Rollback Plan | — one row per risk, concise cells.\n"
+            "- Acceptance Criteria MUST be a 3-column markdown table: | # | Acceptance Criterion | Verification Method |\n"
+            "- Deliverables MUST be a 4-column markdown table: | # | Deliverable | Description | Expected Date |\n"
+            "- Template Usage Guide: SKIP entirely — do not output it.\n"
+            "- Appendix A: Write only 'Not Applicable — This is a Migration/Project TIP.' unless source docs indicate a SIP.\n"
+            "- Appendix B: Populate with technology-specific risk reference content. Author reference only.\n\n"
         )
+
+        SKIP_SECTIONS = {"template usage guide"}
 
         if discovery_text:
             # For large documents, include full text but clearly delimited
@@ -236,6 +247,10 @@ class ClaudeService:
             level = section.get("level", 1)
             title = section.get("title", "").strip()
             content = section.get("content", "").strip()
+
+            if title.lower() in SKIP_SECTIONS:
+                continue
+
             heading_prefix = "#" * level
             parts.append(f"{heading_prefix} {title}\n")
             if content:
@@ -318,14 +333,33 @@ class ClaudeService:
                 "Format output as a clean Word-ready document: use the heading names "
                 "exactly as given, write in full paragraphs or bullet lists as "
                 "appropriate, and do not add extra commentary outside the sections.\n\n"
+                "CRITICAL RULES:\n"
+                "- Do NOT generate a 'Risk Register' section — it is not part of this template.\n"
+                "- Risks and Contingencies sections MUST be a 4-column markdown table: "
+                "| Risk | Likelihood | Mitigation Strategy | Rollback Plan | — one row per risk, concise cells.\n"
+                "- Acceptance Criteria MUST be a 3-column markdown table: "
+                "| # | Acceptance Criterion | Verification Method |\n"
+                "- Deliverables MUST be a 4-column markdown table: "
+                "| # | Deliverable | Description | Expected Date |\n"
+                "- Template Usage Guide: DO NOT include this section in output — it is author instructions only.\n"
+                "- Appendix A: If this is a Migration/Project TIP (not a SIP), write only: "
+                "'Not Applicable — This is a Migration/Project TIP. This appendix applies only to Support Implementation Plans.'\n"
+                "- Appendix B: Populate with relevant risk reference content from the source documents. "
+                "This section is for author reference only and will be removed before customer delivery.\n\n"
             )
 
             parts.append("=== TEMPLATE SECTIONS TO POPULATE ===\n\n")
+
+            # Sections to skip entirely from output
+            SKIP_SECTIONS = {"template usage guide"}
 
             for section in sections:
                 level = section.get("level", 1)
                 title = section.get("title", "").strip()
                 content = section.get("content", "").strip()
+
+                if title.lower() in SKIP_SECTIONS:
+                    continue
 
                 # Heading markers scaled to level
                 heading_prefix = "#" * level
