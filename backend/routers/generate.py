@@ -461,11 +461,58 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         """Apply background fill to a single table cell."""
         tc = cell._tc
         tcPr = tc.get_or_add_tcPr()
+        for old in tcPr.findall(qn('w:shd')):
+            tcPr.remove(old)
         shd = OxmlElement('w:shd')
         shd.set(qn('w:val'), 'clear')
         shd.set(qn('w:color'), 'auto')
         shd.set(qn('w:fill'), hex_color)
         tcPr.append(shd)
+
+    def set_cell_border(cell, color='CCCCCC', sz='4'):
+        """Apply uniform border to all sides of a table cell."""
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        for old in tcPr.findall(qn('w:tcBorders')):
+            tcPr.remove(old)
+        tcBorders = OxmlElement('w:tcBorders')
+        for side in ('top', 'left', 'bottom', 'right'):
+            border = OxmlElement(f'w:{side}')
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), sz)
+            border.set(qn('w:space'), '0')
+            border.set(qn('w:color'), color)
+            tcBorders.append(border)
+        tcPr.append(tcBorders)
+
+    def set_cell_padding(cell, top=80, bottom=80, left=120, right=120):
+        """Set cell inner margin in twips."""
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        for old in tcPr.findall(qn('w:tcMar')):
+            tcPr.remove(old)
+        mar = OxmlElement('w:tcMar')
+        for side, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+            item = OxmlElement(f'w:{side}')
+            item.set(qn('w:w'), str(val))
+            item.set(qn('w:type'), 'dxa')
+            mar.append(item)
+        tcPr.append(mar)
+
+    def set_cell_valign(cell, align='center'):
+        """Set vertical alignment on a table cell."""
+        from docx.enum.table import WD_ALIGN_VERTICAL
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER if align == 'center' else WD_ALIGN_VERTICAL.TOP
+
+    def set_para_spacing(para, before=0, after=60):
+        """Set precise paragraph spacing via XML (twips)."""
+        pPr = para._p.get_or_add_pPr()
+        for old in pPr.findall(qn('w:spacing')):
+            pPr.remove(old)
+        spacing = OxmlElement('w:spacing')
+        spacing.set(qn('w:before'), str(before))
+        spacing.set(qn('w:after'), str(after))
+        pPr.append(spacing)
 
     # Pre-compute available style names once
     _available_styles = {s.name for s in doc.styles}
@@ -563,8 +610,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     def add_list_paragraph(text: str, is_ordered: bool = False, level: int = 0):
         """Add a properly formatted bullet or numbered list paragraph."""
         p = doc.add_paragraph(style='List Paragraph')
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(4)
+        set_para_spacing(p, before=0, after=40)
         num_id = _get_or_create_numbering(is_ordered)
         if num_id is not None:
             pPr = p._p.get_or_add_pPr()
@@ -577,12 +623,14 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             numPr.append(numId_el)
             pPr.append(numPr)
         else:
-            # Fallback: manual bullet character with indent
             p.paragraph_format.left_indent = Inches(0.5)
             p.paragraph_format.first_line_indent = Inches(-0.25)
             prefix = '1. ' if is_ordered else '\u2022  '
             text = prefix + text
-        add_inline_runs(p, text, base_size=Pt(11))
+        add_inline_runs(p, text, base_size=Pt(10.5))
+        for r in p.runs:
+            r.font.name = 'Calibri'
+            r.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
         return p
 
     def add_horizontal_rule(doc):
@@ -608,20 +656,33 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         for ri, row_line in enumerate(rows):
             cells = [c.strip() for c in row_line.strip('|').split('|')]
             tr = t.add_row()
+            if ri == 0:
+                tr.height = Inches(0.33)
             for ci in range(max(cols, 1)):
                 cell_text = cells[ci] if ci < len(cells) else ''
                 cell_obj = tr.cells[ci]
                 cell_obj.text = ''
+                set_cell_valign(cell_obj)
+                set_cell_padding(cell_obj, top=60, bottom=60, left=120, right=120)
                 cell_para = cell_obj.paragraphs[0]
-                add_inline_runs(cell_para, cell_text, base_size=Pt(10))
+                set_para_spacing(cell_para, before=0, after=0)
                 if ri == 0:
                     shade_cell(cell_obj, '143F6A')
+                    set_cell_border(cell_obj, color='143F6A', sz='4')
+                    add_inline_runs(cell_para, cell_text, base_size=Pt(10))
                     for r in cell_para.runs:
                         r.font.bold = True
                         r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                        r.font.size = Pt(10)
+                        r.font.name = 'Calibri'
                 else:
-                    cell_para.paragraph_format.space_after = Pt(2)
+                    bg = 'F7F7F7' if ri % 2 == 1 else 'FFFFFF'
+                    shade_cell(cell_obj, bg)
+                    set_cell_border(cell_obj, color='CCCCCC', sz='4')
+                    set_cell_padding(cell_obj, top=40, bottom=40, left=100, right=100)
+                    add_inline_runs(cell_para, cell_text, base_size=Pt(10))
+                    for r in cell_para.runs:
+                        r.font.name = 'Calibri'
+                        r.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
 
     # Strip [INSTRUCTION: ...] blocks (may span multiple lines)
     content = re.sub(r'\[INSTRUCTION:.*?\]', '', draft.content, flags=re.DOTALL)
@@ -727,12 +788,14 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             i += 1
             continue
 
-        # Normal paragraph — Calibri 11pt matching template body
+        # Normal paragraph — 10.5pt Calibri #222 with precise spacing
         p = doc.add_paragraph()
-        add_inline_runs(p, line, base_size=Pt(11))
+        set_para_spacing(p, before=0, after=80)
+        add_inline_runs(p, line, base_size=Pt(10.5))
         for run in p.runs:
-            if not run.font.name:
-                run.font.name = 'Calibri'
+            run.font.name = 'Calibri'
+            if not run.font.color.type:
+                run.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
         i += 1
 
     # Flush any trailing table
