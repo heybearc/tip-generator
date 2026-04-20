@@ -309,23 +309,22 @@ async def refine_section_guided(
 
     mode_prompts = {
         "tighten": (
-            "Your job is to tighten and condense this section. Remove redundancy, "
-            "wordiness, and over-explanation. Preserve all factual detail. "
-            "Aim to reduce length by 30-50% without losing substance."
+            "Tighten and condense this section. Remove all redundancy, wordiness, and over-explanation. "
+            "Preserve every factual detail. Cut length by at least 40%. Be ruthlessly concise."
         ),
         "comply": (
-            "Your job is to rewrite this section so it precisely follows the template instruction below. "
-            "Remove content that doesn't belong in this section type. Add structure the instruction requires. "
-            "Keep all factual specifics from the original."
+            "Rewrite this section to precisely match the template instruction below. "
+            "Remove anything that doesn't belong. Add any required structure. Keep all factual specifics."
         ),
         "risks": (
-            "Your job is to reformat the risks in this section to follow the 4-field structure: "
-            "(1) Risk description, (2) Likelihood/Impact, (3) Mitigation strategy, (4) Rollback plan. "
-            "Each risk should be a concise bullet block, not flowing prose."
+            "Convert this section into a 4-column markdown table matching the Thrive TIP template exactly. "
+            "The table MUST have these exact headers: | Risk | Likelihood | Mitigation Strategy | Rollback Plan |\n"
+            "Each row = one risk. Keep each cell to 1-2 concise sentences maximum. "
+            "No prose paragraphs. No bullet points outside the table. Table rows only."
         ),
         "both": (
-            "Your job is to tighten AND rewrite this section to precisely follow the template instruction. "
-            "Remove redundancy. Apply required structure. Preserve all factual detail from the original."
+            "Tighten AND rewrite this section to match the template instruction. "
+            "Remove all redundancy. Apply required structure. Preserve all factual details from the original."
         ),
     }
 
@@ -343,9 +342,10 @@ Rules:
 - Preserve all customer-specific details, IP addresses, server names, dates
 - Use markdown formatting (## headings, bullets, **bold** for key terms)
 - Do not invent facts or add content not grounded in the original
-- For Risks sections: use bullet blocks with the 4-field structure per risk: Risk | Likelihood/Impact | Mitigation | Rollback
+- For Risks and Contingencies: output a markdown table with columns: Risk | Likelihood | Mitigation Strategy | Rollback Plan. One row per risk. Each cell = 1 sentence max. No prose.
 - For Implementation Details: use numbered steps or clear sub-sections
-- For Revision History: version 1.0 = initial release (never 0.1)"""
+- For Revision History: version 1.0 = initial release (never 0.1)
+- Be concise. Do not pad responses. Less is more."""
 
     prompt = f"""Section: {section_key}
 
@@ -363,7 +363,7 @@ Rewrite this section following the rules above."""
             client = anthropic.Anthropic()
             message = client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=4096,
+                max_tokens=1500,
                 system=system_prompt,
                 messages=[{"role": "user", "content": prompt}]
             )
