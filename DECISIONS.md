@@ -67,3 +67,16 @@ When adding a decision, use this format:
 - **Why:** Faster iteration during development. Deploy to green only when features are stable and ready for production traffic switching.
 - **When:** 2026-04-20
 - **Consequences:** Must manually sync code to green when ready for deployment
+
+## D-LOCAL-005: deploy.sh script on each container
+- **Decision:** Each container has `/opt/tip-generator/deploy.sh` as the canonical deploy method
+- **Why:** Previous ad-hoc `git pull && cd frontend && npm run build` commands failed because shell context was lost between commands, causing stale builds. A single script in the repo root runs all steps in correct order.
+- **When:** 2026-04-20
+- **Usage:** `ssh tip-blue '/opt/tip-generator/deploy.sh'` or `ssh tip-green '/opt/tip-generator/deploy.sh'`
+- **Steps:** git pull → npm run build (frontend) → restart tip-generator → reload nginx → health check
+
+## D-LOCAL-006: SSH config covers bare IPs for both TIP containers
+- **Decision:** SSH config `Host` entries for CT190 and CT191 include the raw IP address as an alias, with `StrictHostKeyChecking accept-new` and `CheckHostIP no`
+- **Why:** Containers occasionally have host key changes after Proxmox maintenance. Without this, every SSH command breaks requiring manual `ssh-keygen -R`. `CheckHostIP no` prevents ECDSA/ED25519 confusion when the same IP changes keys.
+- **When:** 2026-04-20
+- **Aliases:** `tip-blue`, `ct190-tip`, `10.92.3.91` → CT190 / `tip-green`, `ct191-tip`, `10.92.3.92` → CT191
