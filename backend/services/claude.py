@@ -299,12 +299,12 @@ class ClaudeService:
         # ── Source documents ─────────────────────────────────────────────────
         if discovery_doc and discovery_doc.extracted_text:
             parts.append("=== DISCOVERY WORKSHEET ===\n")
-            parts.append(discovery_doc.extracted_text[:12000])
+            parts.append(discovery_doc.extracted_text)  # Full text — no truncation
             parts.append("\n\n")
 
         if service_order_doc and service_order_doc.extracted_text:
             parts.append("=== SERVICE ORDER ===\n")
-            parts.append(service_order_doc.extracted_text[:12000])
+            parts.append(service_order_doc.extracted_text)  # Full text — no truncation
             parts.append("\n\n")
 
         if draft.description:
