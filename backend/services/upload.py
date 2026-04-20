@@ -15,7 +15,7 @@ from docx import Document as DocxDocument
 class UploadService:
     """Service for handling file uploads and processing"""
     
-    def __init__(self, upload_dir: str = "/var/tmp/tip-generator/uploads"):
+    def __init__(self, upload_dir: str = "/mnt/tip-uploads"):
         self.upload_dir = Path(upload_dir)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         
