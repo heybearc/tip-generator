@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, FileText, Download, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Upload, FileText, Download, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight, Pencil, Save, X, BookOpen } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -47,6 +47,16 @@ export default function TemplateManagementPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Instructions editor state
+  const [instructions, setInstructions] = useState<Record<string, string>>({})
+  const [loadingInstructions, setLoadingInstructions] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const [savingInstruction, setSavingInstruction] = useState(false)
+  const [newSectionKey, setNewSectionKey] = useState('')
+  const [addingSection, setAddingSection] = useState(false)
 
   useEffect(() => {
     loadCurrentTemplate()
@@ -147,6 +157,55 @@ export default function TemplateManagementPage() {
     }
   }
 
+  const loadInstructions = async () => {
+    setLoadingInstructions(true)
+    try {
+      const response = await axios.get(`${API_URL}/templates/active/instructions`)
+      setInstructions(response.data.instructions || {})
+      setShowInstructions(true)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to load instructions')
+    } finally {
+      setLoadingInstructions(false)
+    }
+  }
+
+  const saveInstruction = async (key: string, value: string) => {
+    if (!currentTemplate) return
+    setSavingInstruction(true)
+    try {
+      await axios.patch(`${API_URL}/templates/${currentTemplate.id}/instructions`, {
+        instructions: { [key]: value }
+      })
+      setInstructions(prev => ({ ...prev, [key]: value }))
+      setEditingKey(null)
+      setSuccess(`Saved instruction for "${key}"`)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to save instruction')
+    } finally {
+      setSavingInstruction(false)
+    }
+  }
+
+  const addSection = async () => {
+    if (!newSectionKey.trim() || !currentTemplate) return
+    setSavingInstruction(true)
+    try {
+      await axios.patch(`${API_URL}/templates/${currentTemplate.id}/instructions`, {
+        instructions: { [newSectionKey.trim()]: '' }
+      })
+      setInstructions(prev => ({ ...prev, [newSectionKey.trim()]: '' }))
+      setEditingKey(newSectionKey.trim())
+      setEditingValue('')
+      setNewSectionKey('')
+      setAddingSection(false)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to add section')
+    } finally {
+      setSavingInstruction(false)
+    }
+  }
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -209,6 +268,14 @@ export default function TemplateManagementPage() {
                 >
                   {showStructure ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   {loadingStructure ? 'Loading...' : showStructure ? 'Hide Structure' : 'View Structure'}
+                </button>
+                <button
+                  onClick={() => showInstructions ? setShowInstructions(false) : loadInstructions()}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  disabled={loadingInstructions}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  {loadingInstructions ? 'Loading...' : showInstructions ? 'Hide Instructions' : 'Edit Instructions'}
                 </button>
                 <button
                   onClick={() => handleDownload(currentTemplate.id)}
@@ -315,6 +382,111 @@ export default function TemplateManagementPage() {
           </div>
         )}
       </div>
+
+      {/* Section Instructions Editor */}
+      {showInstructions && (
+        <div className="bg-white rounded-lg shadow-sm border border-purple-200 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-purple-600" />
+              Section Instructions
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAddingSection(!addingSection)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200"
+              >
+                + Add Section
+              </button>
+              <button onClick={() => setShowInstructions(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-500 mb-5">
+            These instructions tell Claude how to write each section type. Overrides layer on top of what was parsed from the template.
+            Changes take effect immediately on the next refinement.
+          </p>
+
+          {addingSection && (
+            <div className="flex gap-2 mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+              <input
+                type="text"
+                value={newSectionKey}
+                onChange={e => setNewSectionKey(e.target.value)}
+                placeholder="Section name (e.g. Risks and Contingencies)"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
+                onKeyDown={e => e.key === 'Enter' && addSection()}
+              />
+              <button
+                onClick={addSection}
+                disabled={savingInstruction || !newSectionKey.trim()}
+                className="px-3 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+              >
+                Add
+              </button>
+              <button onClick={() => { setAddingSection(false); setNewSectionKey('') }} className="p-2 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {Object.keys(instructions).length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                No instructions found. Upload a template or add sections manually.
+              </div>
+            ) : (
+              Object.entries(instructions).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => (
+                <div key={key} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+                    <span className="font-medium text-sm text-gray-800">{key}</span>
+                    {editingKey !== key && (
+                      <button
+                        onClick={() => { setEditingKey(key); setEditingValue(value) }}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded"
+                      >
+                        <Pencil className="w-3 h-3" /> Edit
+                      </button>
+                    )}
+                  </div>
+                  {editingKey === key ? (
+                    <div className="p-3">
+                      <textarea
+                        value={editingValue}
+                        onChange={e => setEditingValue(e.target.value)}
+                        rows={4}
+                        className="w-full text-sm border border-gray-300 rounded p-2 focus:outline-none focus:ring-2 focus:ring-purple-400 font-mono"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 mt-2 justify-end">
+                        <button
+                          onClick={() => { setEditingKey(null); setEditingValue('') }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+                        >
+                          <X className="w-3 h-3" /> Cancel
+                        </button>
+                        <button
+                          onClick={() => saveInstruction(key, editingValue)}
+                          disabled={savingInstruction}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-white bg-purple-600 rounded hover:bg-purple-700 disabled:opacity-50"
+                        >
+                          <Save className="w-3 h-3" /> {savingInstruction ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-gray-600 whitespace-pre-wrap">
+                      {value || <span className="italic text-gray-400">No instruction set — click Edit to add one.</span>}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Upload New Template */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">

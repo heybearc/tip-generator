@@ -187,6 +187,72 @@ async def download_template(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
+@router.get("/active/instructions")
+async def get_active_instructions(db: Session = Depends(get_db)):
+    """
+    Return the per-section instruction map for the active template.
+    Shape: { "section_key": "instruction text", ... }
+    """
+    template = db.query(TemplateFile).filter(TemplateFile.is_active == True).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="No active template found")
+    if not template.template_structure:
+        return {"instructions": {}}
+    try:
+        structure = json.loads(template.template_structure)
+        raw = structure.get("instructions", [])
+        # template_structure stores instructions as a list of {section, text, type}
+        # Flatten into {section: text} map for easy lookup
+        instr_map: dict = {}
+        if isinstance(raw, list):
+            for item in raw:
+                sec = (item.get("section") or "").strip()
+                txt = (item.get("text") or "").strip()
+                if sec and txt:
+                    instr_map[sec] = txt
+        elif isinstance(raw, dict):
+            instr_map = raw
+        # Also include any manually-edited override map stored at structure["instruction_overrides"]
+        overrides = structure.get("instruction_overrides", {})
+        instr_map.update(overrides)
+        return {"template_id": template.id, "version": template.version, "instructions": instr_map}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse instructions: {str(e)}")
+
+
+@router.patch("/{template_id}/instructions")
+async def update_instructions(
+    template_id: int,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Update per-section instruction overrides for a template.
+    Body: { "instructions": { "section_key": "new instruction text", ... } }
+    Stored in template_structure["instruction_overrides"] so the original
+    parsed instructions are preserved and overrides layer on top.
+    """
+    template = db.query(TemplateFile).filter(TemplateFile.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    updates: dict = body.get("instructions", {})
+    if not isinstance(updates, dict):
+        raise HTTPException(status_code=422, detail="instructions must be an object")
+
+    try:
+        structure = json.loads(template.template_structure) if template.template_structure else {}
+        overrides = structure.get("instruction_overrides", {})
+        overrides.update(updates)
+        structure["instruction_overrides"] = overrides
+        template.template_structure = json.dumps(structure)
+        db.commit()
+        return {"message": f"Updated {len(updates)} instruction(s)", "instruction_overrides": overrides}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+
+
 @router.get("/{template_id}/structure")
 async def get_template_structure(
     template_id: int,

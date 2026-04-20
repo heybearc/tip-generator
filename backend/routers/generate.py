@@ -251,14 +251,33 @@ async def refine_section_guided(
     author_name = (current_user.full_name or current_user.username) if current_user else "Thrive"
     today = _dt.date.today().strftime("%B %d, %Y")
 
-    # Load instruction map
-    instr_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'template_instructions.json')
-    instr_path = os.path.normpath(instr_path)
-    template_instructions = {}
-    if os.path.exists(instr_path):
-        with open(instr_path) as f:
-            data = _json.load(f)
-            template_instructions = data.get("instructions", {})
+    # Load instruction map from active template in DB (overrides layer on top of parsed)
+    from models.template_file import TemplateFile
+    template_instructions: dict = {}
+    active_tpl = db.query(TemplateFile).filter(TemplateFile.is_active == True).first()
+    if active_tpl and active_tpl.template_structure:
+        try:
+            tpl_structure = _json.loads(active_tpl.template_structure)
+            raw = tpl_structure.get("instructions", [])
+            if isinstance(raw, list):
+                for item in raw:
+                    sec = (item.get("section") or "").strip()
+                    txt = (item.get("text") or "").strip()
+                    if sec and txt:
+                        template_instructions[sec] = txt
+            elif isinstance(raw, dict):
+                template_instructions = raw
+            # Overrides (manually edited in template admin) take precedence
+            template_instructions.update(tpl_structure.get("instruction_overrides", {}))
+        except Exception:
+            pass
+    # Fallback to static file if DB has nothing
+    if not template_instructions:
+        import os as _os
+        instr_path = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), '..', 'static', 'template_instructions.json'))
+        if _os.path.exists(instr_path):
+            with open(instr_path) as f:
+                template_instructions = _json.load(f).get("instructions", {})
 
     # Hard-coded rules for sections the template doesn't have an explicit instruction block for
     HARD_RULES = {
