@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import Base, engine, get_db
+import models  # Import models to register them with Base
 import os
 
 # Create database tables
