@@ -486,6 +486,103 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
             run.font.color.rgb = RGBColor(0x14, 0x3F, 0x6A)
         return p
 
+    def _get_or_create_numbering(is_ordered: bool) -> str:
+        """
+        Ensure an abstractNum + num definition exists in the document for
+        bullets (unordered) or decimal (ordered). Returns the numId string.
+        Stores created IDs on the doc object to avoid duplicates.
+        """
+        attr = '_bullet_num_id' if not is_ordered else '_ordered_num_id'
+        if hasattr(doc, attr):
+            return getattr(doc, attr)
+
+        from docx.oxml import OxmlElement as OE
+        from docx.oxml.ns import qn as QN
+        body = doc.element.body
+        # Find or create w:numbering part
+        try:
+            numbering_part = doc.part.numbering_part
+            numbering_el = numbering_part._element
+        except Exception:
+            # Create numbering part inline via XML — attach to body's parent
+            numbering_el = None
+
+        if numbering_el is None:
+            # Fall back: use List Paragraph style with manual bullet char
+            setattr(doc, attr, None)
+            return None
+
+        # Find next available abstractNumId and numId
+        existing_abstract = numbering_el.findall(qn('w:abstractNum'))
+        abstract_id = str(len(existing_abstract))
+        existing_nums = numbering_el.findall(qn('w:num'))
+        num_id = str(len(existing_nums) + 1)
+
+        # Build abstractNum
+        abstract_num = OE('w:abstractNum')
+        abstract_num.set(qn('w:abstractNumId'), abstract_id)
+        # multiLevelType
+        mlt = OE('w:multiLevelType')
+        mlt.set(qn('w:val'), 'hybridMultilevel')
+        abstract_num.append(mlt)
+        # level 0
+        lvl = OE('w:lvl')
+        lvl.set(qn('w:ilvl'), '0')
+        start = OE('w:start'); start.set(qn('w:val'), '1'); lvl.append(start)
+        if is_ordered:
+            numfmt = OE('w:numFmt'); numfmt.set(qn('w:val'), 'decimal'); lvl.append(numfmt)
+            lvltext = OE('w:lvlText'); lvltext.set(qn('w:val'), '%1.'); lvl.append(lvltext)
+        else:
+            numfmt = OE('w:numFmt'); numfmt.set(qn('w:val'), 'bullet'); lvl.append(numfmt)
+            lvltext = OE('w:lvlText'); lvltext.set(qn('w:val'), '\u2022'); lvl.append(lvltext)
+        lvlJc = OE('w:lvlJc'); lvlJc.set(qn('w:val'), 'left'); lvl.append(lvlJc)
+        pPrL = OE('w:pPr')
+        ind = OE('w:ind')
+        ind.set(qn('w:left'), '720')   # 0.5 inch
+        ind.set(qn('w:hanging'), '360')  # 0.25 inch
+        pPrL.append(ind); lvl.append(pPrL)
+        rPrL = OE('w:rPr')
+        rFont = OE('w:rFonts')
+        rFont.set(qn('w:ascii'), 'Calibri')
+        rFont.set(qn('w:hAnsi'), 'Calibri')
+        rPrL.append(rFont); lvl.append(rPrL)
+        abstract_num.append(lvl)
+        numbering_el.append(abstract_num)
+
+        # Build num referencing abstractNum
+        num_el = OE('w:num')
+        num_el.set(qn('w:numId'), num_id)
+        abstract_ref = OE('w:abstractNumId')
+        abstract_ref.set(qn('w:val'), abstract_id)
+        num_el.append(abstract_ref)
+        numbering_el.append(num_el)
+
+        setattr(doc, attr, num_id)
+        return num_id
+
+    def add_list_paragraph(text: str, is_ordered: bool = False, level: int = 0):
+        """Add a properly formatted bullet or numbered list paragraph."""
+        p = doc.add_paragraph(style='List Paragraph')
+        num_id = _get_or_create_numbering(is_ordered)
+        if num_id is not None:
+            pPr = p._p.get_or_add_pPr()
+            numPr = OxmlElement('w:numPr')
+            ilvl_el = OxmlElement('w:ilvl')
+            ilvl_el.set(qn('w:val'), str(level))
+            numId_el = OxmlElement('w:numId')
+            numId_el.set(qn('w:val'), num_id)
+            numPr.append(ilvl_el)
+            numPr.append(numId_el)
+            pPr.append(numPr)
+        else:
+            # Fallback: manual bullet character with indent
+            p.paragraph_format.left_indent = Inches(0.5)
+            p.paragraph_format.first_line_indent = Inches(-0.25)
+            prefix = '1. ' if is_ordered else '\u2022  '
+            text = prefix + text
+        add_inline_runs(p, text, base_size=Pt(11))
+        return p
+
     def add_horizontal_rule(doc):
         p = doc.add_paragraph()
         pPr = p._p.get_or_add_pPr()
@@ -606,37 +703,22 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
         # Bullet / checklist
         if line.startswith('- [ ] ') or line.startswith('[ ] '):
-            text = line.lstrip('- ').lstrip('[ ] ').strip()
-            p = doc.add_paragraph(style=safe_style('List Bullet'))
-            p.paragraph_format.left_indent = Inches(0.25)
-            p.add_run(f'☐  {text}')
+            add_list_paragraph(f'\u2610  {line.lstrip("- ").lstrip("[ ] ").strip()}', is_ordered=False)
             i += 1
             continue
         if line.startswith('- [x] ') or line.startswith('[x] '):
-            text = line.lstrip('- ').lstrip('[x] ').strip()
-            p = doc.add_paragraph(style=safe_style('List Bullet'))
-            p.paragraph_format.left_indent = Inches(0.25)
-            p.add_run(f'☑  {text}')
+            add_list_paragraph(f'\u2611  {line.lstrip("- ").lstrip("[x] ").strip()}', is_ordered=False)
             i += 1
             continue
         if line.startswith('- ') or line.startswith('* '):
-            p = doc.add_paragraph(style=safe_style('List Bullet'))
-            p.paragraph_format.left_indent = Inches(0.25)
-            add_inline_runs(p, line[2:])
+            add_list_paragraph(line[2:], is_ordered=False)
             i += 1
             continue
 
         # Numbered list  (1. text)
         num_match = re.match(r'^(\d+)\.\s+(.+)$', line)
         if num_match:
-            p = doc.add_paragraph(style=safe_style('List Number'))
-            p.paragraph_format.left_indent = Inches(0.25)
-            add_inline_runs(p, num_match.group(2))
-            i += 1
-            continue
-
-        # Blank line
-        if line.strip() == '':
+            add_list_paragraph(num_match.group(2), is_ordered=True)
             i += 1
             continue
 
