@@ -91,32 +91,57 @@ class UploadService:
         Handles multi-sheet workbooks with key-value pairs, tables, and section headers.
         Produces structured text that Claude can use to populate TIP sections.
         """
-        wb = openpyxl.load_workbook(file_path, data_only=True)
+        # Load twice: data_only for formula results, normal for merged cell structure
+        try:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+        except Exception:
+            wb = openpyxl.load_workbook(file_path)
+
+        # Build a merged-cell value map: each cell in a merged range gets the top-left value
+        def build_merge_map(sheet):
+            merge_map = {}
+            for merged_range in sheet.merged_cells.ranges:
+                top_left = sheet.cell(merged_range.min_row, merged_range.min_col)
+                val = top_left.value
+                for row in range(merged_range.min_row, merged_range.max_row + 1):
+                    for col in range(merged_range.min_col, merged_range.max_col + 1):
+                        if not (row == merged_range.min_row and col == merged_range.min_col):
+                            merge_map[(row, col)] = val
+            return merge_map
+
         output_parts = []
 
         for sheet_name in wb.sheetnames:
-            sheet = wb[sheet_name]
+            try:
+                sheet = wb[sheet_name]
+                merge_map = build_merge_map(sheet)
 
-            # Collect non-empty rows
-            rows = []
-            for row in sheet.iter_rows(values_only=True):
-                cells = [str(c).strip() if c is not None else "" for c in row]
-                # Strip trailing empty cells
-                while cells and cells[-1] == "":
-                    cells.pop()
-                if any(cells):
-                    rows.append(cells)
+                # Collect non-empty rows, resolving merged cells
+                rows = []
+                for row_idx, row in enumerate(sheet.iter_rows(), start=1):
+                    cells = []
+                    for col_idx, cell in enumerate(row, start=1):
+                        val = merge_map.get((row_idx, col_idx), cell.value)
+                        cells.append(str(val).strip() if val is not None else "")
+                    # Strip trailing empty cells
+                    while cells and cells[-1] == "":
+                        cells.pop()
+                    if any(cells):
+                        rows.append(cells)
 
-            if not rows:
+                if not rows:
+                    continue
+
+                output_parts.append(f"\n{'='*60}")
+                output_parts.append(f"SECTION: {sheet_name}")
+                output_parts.append(f"{'='*60}")
+
+                extracted = self._extract_sheet_data(rows)
+                output_parts.append(extracted)
+
+            except Exception as e:
+                output_parts.append(f"\n[Sheet '{sheet_name}' could not be parsed: {e}]")
                 continue
-
-            output_parts.append(f"\n{'='*60}")
-            output_parts.append(f"SECTION: {sheet_name}")
-            output_parts.append(f"{'='*60}")
-
-            # Detect layout and extract accordingly
-            extracted = self._extract_sheet_data(rows)
-            output_parts.append(extracted)
 
         return "\n".join(output_parts)
 
