@@ -1,7 +1,7 @@
 """
 TIP generation API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -11,14 +11,13 @@ from database import get_db
 from models.draft import Draft, DraftStatus
 from models.document import Document
 from models.template_file import TemplateFile
+from models.user import User as UserModel
 from schemas.draft import DraftCreate, DraftResponse, GenerateTIPRequest, GenerateTIPResponse, DraftUpdate, RefineRequest, RefineResponse
 from services.claude import ClaudeService
 from celery_app import generate_tip_task
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
-
-# Temporary: hardcoded user_id until we implement auth
-TEMP_USER_ID = 1
 
 def get_claude_service():
     """Get Claude service instance"""
@@ -27,7 +26,8 @@ def get_claude_service():
 @router.post("/draft", response_model=DraftResponse)
 async def create_draft(
     draft_data: DraftCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Create a new TIP draft
@@ -36,7 +36,7 @@ async def create_draft(
     if draft_data.discovery_document_id:
         doc = db.query(Document).filter(
             Document.id == draft_data.discovery_document_id,
-            Document.user_id == TEMP_USER_ID
+            Document.user_id == current_user.id
         ).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Discovery document not found")
@@ -44,14 +44,14 @@ async def create_draft(
     if draft_data.service_order_document_id:
         doc = db.query(Document).filter(
             Document.id == draft_data.service_order_document_id,
-            Document.user_id == TEMP_USER_ID
+            Document.user_id == current_user.id
         ).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Service order document not found")
     
     # Create draft
     draft = Draft(
-        user_id=TEMP_USER_ID,
+        user_id=current_user.id,
         title=draft_data.title,
         description=draft_data.description,
         discovery_document_id=draft_data.discovery_document_id,
@@ -69,7 +69,8 @@ async def create_draft(
 @router.post("/tip", response_model=GenerateTIPResponse)
 async def generate_tip(
     request: GenerateTIPRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Enqueue TIP generation as a Celery task and return immediately.
@@ -77,7 +78,7 @@ async def generate_tip(
     """
     draft = db.query(Draft).filter(
         Draft.id == request.draft_id,
-        Draft.user_id == TEMP_USER_ID
+        Draft.user_id == current_user.id
     ).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
@@ -101,15 +102,16 @@ async def generate_tip(
 
 @router.get("/drafts", response_model=List[DraftResponse])
 async def list_drafts(
-    db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     List all drafts for the current user
     """
     drafts = db.query(Draft)\
-        .filter(Draft.user_id == TEMP_USER_ID)\
+        .filter(Draft.user_id == current_user.id)\
         .order_by(Draft.created_at.desc())\
         .offset(skip)\
         .limit(limit)\
@@ -121,9 +123,10 @@ async def list_drafts(
 async def update_draft(
     draft_id: int,
     update: DraftUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     draft.content = update.content
@@ -137,11 +140,12 @@ async def update_draft(
 async def refine_draft(
     draft_id: int,
     request: RefineRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if not draft.content and not request.current_content:
@@ -165,13 +169,14 @@ async def refine_draft(
 @router.get("/drafts/{draft_id}", response_model=DraftResponse)
 async def get_draft(
     draft_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Get details of a specific draft
     """
     draft = db.query(Draft)\
-        .filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID)\
+        .filter(Draft.id == draft_id, Draft.user_id == current_user.id)\
         .first()
     
     if not draft:
@@ -180,12 +185,16 @@ async def get_draft(
     return draft
 
 @router.get("/drafts/{draft_id}/progress")
-async def get_draft_progress(draft_id: int, db: Session = Depends(get_db)):
+async def get_draft_progress(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
     """
     Lightweight polling endpoint — returns status and chunk progress only.
     Does NOT return content. Use this during generation instead of GET /drafts/{id}.
     """
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
@@ -212,10 +221,14 @@ async def get_draft_progress(draft_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/drafts/{draft_id}/cancel")
-async def cancel_draft(draft_id: int, db: Session = Depends(get_db)):
+async def cancel_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
     """Cancel an in-progress generation: revoke the Celery task and mark draft as failed."""
     from celery_app import celery
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if draft.status != DraftStatus.GENERATING:
@@ -229,8 +242,12 @@ async def cancel_draft(draft_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/drafts/{draft_id}")
-async def delete_draft(draft_id: int, db: Session = Depends(get_db)):
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+async def delete_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     db.delete(draft)
@@ -243,12 +260,13 @@ async def update_draft_section(
     draft_id: int,
     section_key: str,
     body: dict,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """Update a single section of a draft by key.
     section_key may also be passed in body as 'key' to avoid URL slash issues.
     """
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     # Prefer key from body if present (avoids URL encoding issues with slashes)
@@ -298,7 +316,6 @@ async def refine_section_guided(
     mode = body.get("mode", "tighten")  # tighten | comply | risks | both
 
     # Resolve author name from current user
-    current_user = db.query(UserModel).filter(UserModel.id == TEMP_USER_ID).first()
     author_name = (current_user.full_name or current_user.username) if current_user else "Thrive"
     today = _dt.date.today().strftime("%B %d, %Y")
 

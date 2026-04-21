@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen } from 'lucide-react'
+import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen, LogOut, User } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -7,6 +8,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const isActive = (path: string) => location.pathname === path
 
@@ -111,6 +113,18 @@ export default function Layout({ children }: LayoutProps) {
                 Help
               </Link>
             </nav>
+            {/* User menu */}
+            <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
+              <User className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-700 max-w-[120px] truncate">{user?.full_name || user?.email}</span>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </header>

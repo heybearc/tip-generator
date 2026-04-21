@@ -1,25 +1,25 @@
 """
 File upload API endpoints
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form, Request
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models.document import DocumentType, DocumentStatus
+from models.user import User as UserModel
 from schemas.document import DocumentUploadResponse, DocumentResponse
 from services.upload import UploadService
+from routers.auth import get_current_user
 import os
 
 router = APIRouter(prefix="/api", tags=["upload"])
 upload_service = UploadService()
 
-# Temporary: hardcoded user_id until we implement auth
-TEMP_USER_ID = 1
-
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Generic document upload endpoint - auto-detects document type
@@ -47,7 +47,7 @@ async def upload_document(
         document = await upload_service.save_upload(
             file=file,
             document_type=document_type,
-            user_id=TEMP_USER_ID,
+            user_id=current_user.id,
             db=db
         )
         
@@ -66,7 +66,8 @@ async def upload_document(
 @router.post("/discovery", response_model=DocumentUploadResponse)
 async def upload_discovery_document(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Upload Excel discovery worksheet
@@ -96,7 +97,7 @@ async def upload_discovery_document(
     document = await upload_service.save_upload(
         file=file,
         document_type=DocumentType.DISCOVERY_EXCEL,
-        user_id=TEMP_USER_ID,
+        user_id=current_user.id,
         db=db
     )
     
@@ -110,7 +111,8 @@ async def upload_discovery_document(
 @router.post("/service-order", response_model=DocumentUploadResponse)
 async def upload_service_order(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Upload PDF service order
@@ -140,7 +142,7 @@ async def upload_service_order(
     document = await upload_service.save_upload(
         file=file,
         document_type=DocumentType.SERVICE_ORDER_PDF,
-        user_id=TEMP_USER_ID,
+        user_id=current_user.id,
         db=db
     )
     
@@ -154,7 +156,8 @@ async def upload_service_order(
 @router.get("/documents/{document_id}/extracted-text")
 async def get_extracted_text(
     document_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Preview the extracted text for a document — useful for verifying
@@ -163,7 +166,7 @@ async def get_extracted_text(
     from models.document import Document
     document = db.query(Document).filter(
         Document.id == document_id,
-        Document.user_id == TEMP_USER_ID
+        Document.user_id == current_user.id
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -179,7 +182,8 @@ async def get_extracted_text(
 async def list_documents(
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     List all uploaded documents for the current user
@@ -187,7 +191,7 @@ async def list_documents(
     from models.document import Document
     
     documents = db.query(Document)\
-        .filter(Document.user_id == TEMP_USER_ID)\
+        .filter(Document.user_id == current_user.id)\
         .order_by(Document.created_at.desc())\
         .offset(skip)\
         .limit(limit)\
@@ -198,7 +202,8 @@ async def list_documents(
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Get details of a specific document
@@ -206,7 +211,7 @@ async def get_document(
     from models.document import Document
     
     document = db.query(Document)\
-        .filter(Document.id == document_id, Document.user_id == TEMP_USER_ID)\
+        .filter(Document.id == document_id, Document.user_id == current_user.id)\
         .first()
     
     if not document:
@@ -217,7 +222,8 @@ async def get_document(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Delete a document and its file
@@ -228,7 +234,7 @@ async def delete_document(
     document = db.query(Document)\
         .filter(
             Document.id == document_id,
-            Document.user_id == TEMP_USER_ID
+            Document.user_id == current_user.id
         )\
         .first()
     

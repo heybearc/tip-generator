@@ -1,5 +1,19 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
+import LoginPage from './pages/LoginPage'
+import { Loader2 } from 'lucide-react'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  )
+  if (!user) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
 import HomePage from './pages/HomePage'
 import UploadPage from './pages/UploadPage'
 import DraftsPage from './pages/DraftsPage'
@@ -17,8 +31,13 @@ import TemplateManagementHelpPage from './pages/help/TemplateManagementPage'
 
 function App() {
   return (
-    <Layout>
-      <Routes>
+    <AuthProvider>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/*" element={
+        <ProtectedRoute>
+          <Layout>
+            <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/generate" element={<GeneratePage />} />
@@ -33,8 +52,12 @@ function App() {
         <Route path="/help/manage-drafts" element={<ManageDraftsPage />} />
         <Route path="/help/template-management" element={<TemplateManagementHelpPage />} />
         <Route path="/release-notes" element={<ReleaseNotesPage />} />
-      </Routes>
-    </Layout>
+            </Routes>
+          </Layout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+    </AuthProvider>
   )
 }
 
