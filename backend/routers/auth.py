@@ -157,24 +157,27 @@ async def callback(
         log.warning(f"ID TOKEN decode failed: {e} — falling back to userinfo")
         info = {}
 
-    # Fallback to userinfo if id_token decode failed
-    if not info.get("sub"):
-        access_token = tokens.get("access_token")
-        async with httpx.AsyncClient() as client:
-            userinfo_resp = await client.get(
-                USERINFO_URL,
-                headers={"Authorization": f"Bearer {access_token}"},
-                timeout=10,
-            )
-        log.warning(f"USERINFO fallback: status={userinfo_resp.status_code}")
-        if userinfo_resp.status_code != 200:
-            return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
-        info = userinfo_resp.json()
+    sub = info.get("sub", "")
+    if not sub:
+        log.warning("ID TOKEN has no sub — cannot identify user")
+        return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
 
-    sub      = info.get("sub", "")
-    email    = info.get("email", "")
-    name     = info.get("name", "") or info.get("preferred_username", email)
-    username = info.get("preferred_username", email.split("@")[0])
+    # Always fetch userinfo for email/name — id_token only contains sub+aud+iss
+    access_token = tokens.get("access_token", "")
+    async with httpx.AsyncClient() as client:
+        userinfo_resp = await client.get(
+            USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+    log.warning(f"USERINFO: status={userinfo_resp.status_code} body={userinfo_resp.text[:200]}")
+    if userinfo_resp.status_code == 200:
+        profile = userinfo_resp.json()
+        info.update(profile)
+
+    email    = info.get("email", "") or f"{sub[:8]}@authentik.local"
+    name     = info.get("name", "") or info.get("preferred_username", "") or email.split("@")[0]
+    username = info.get("preferred_username", "") or email.split("@")[0] or sub[:16]
 
     # Upsert user
     user = db.query(User).filter(User.oauth_id == sub, User.oauth_provider == "authentik").first()
