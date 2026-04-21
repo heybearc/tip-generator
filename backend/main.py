@@ -17,7 +17,8 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="TIP Generator API",
     description="AI-powered Technical Implementation Plan generator using Claude API",
-    version="0.2.0"
+    version="0.2.0",
+    redirect_slashes=False,
 )
 
 # Include routers
