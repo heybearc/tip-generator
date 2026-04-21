@@ -94,11 +94,11 @@ async def login(request: Request):
         "scope": "openid email profile",
         "state": state,
     }
-    from urllib.parse import urlencode, quote
-    # Build the query string manually keeping redirect_uri unencoded so Authentik's
-    # internal next= re-encoding doesn't produce a double-encoded URI mismatch
+    from urllib.parse import urlencode
+    # Use default urlencode (quote_plus: spaces→+) for all params except redirect_uri
+    # which must remain unencoded to avoid double-encoding in Authentik's next= redirect
     other = {k: v for k, v in params.items() if k != "redirect_uri"}
-    qs = urlencode(other, quote_via=quote) + "&redirect_uri=" + REDIRECT_URI
+    qs = urlencode(other) + "&redirect_uri=" + REDIRECT_URI
     url = f"{AUTHORIZE_URL}?{qs}"
     response = RedirectResponse(url=url, status_code=302)
     response.set_cookie("oauth_state", state, httponly=True, secure=COOKIE_SECURE,
