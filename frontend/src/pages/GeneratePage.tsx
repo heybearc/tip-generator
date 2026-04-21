@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Wand2, FileText, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -14,21 +14,19 @@ interface Document {
   created_at: string
 }
 
-interface Draft {
-  id: number
-  title: string
-  status: string
-  content: string | null
-  claude_model: string | null
-  generation_tokens: number | null
-  created_at: string
-  generated_at: string | null
-}
-
 interface CurrentTemplate {
   id: number
   filename: string
   version: number
+}
+
+interface ProgressState {
+  draftId: number
+  title: string
+  status: string
+  chunk: number
+  totalChunks: number
+  tokens: number | null
 }
 
 export default function GeneratePage() {
@@ -40,9 +38,9 @@ export default function GeneratePage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [progress, setProgress] = useState<ProgressState | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showRaw, setShowRaw] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     loadDocuments()
@@ -74,10 +72,10 @@ export default function GeneratePage() {
     }
     setError(null)
     setGenerating(true)
-    setDraft(null)
+    setProgress(null)
+    if (pollRef.current) clearInterval(pollRef.current)
 
     try {
-      // 1. Create draft
       const createRes = await axios.post(`${API_URL}/generate/draft`, {
         title: title.trim(),
         description: description.trim() || null,
@@ -86,17 +84,47 @@ export default function GeneratePage() {
       })
       const draftId = createRes.data.id
 
-      // 2. Enqueue generation (returns immediately)
       await axios.post(`${API_URL}/generate/tip`, { draft_id: draftId })
 
-      // 3. Task is queued — redirect to Drafts to track progress
-      navigate(`/drafts`)
+      setProgress({ draftId, title: title.trim(), status: 'generating', chunk: 0, totalChunks: 0, tokens: null })
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await axios.get(`${API_URL}/generate/drafts/${draftId}/progress`)
+          const data = res.data
+          setProgress({
+            draftId,
+            title: data.title,
+            status: data.status,
+            chunk: data.progress?.chunk ?? 0,
+            totalChunks: data.progress?.total_chunks ?? 0,
+            tokens: data.generation_tokens,
+          })
+          if (data.status === 'completed') {
+            clearInterval(pollRef.current!)
+            pollRef.current = null
+            setGenerating(false)
+            navigate(`/drafts/${draftId}`)
+          } else if (data.status === 'failed') {
+            clearInterval(pollRef.current!)
+            pollRef.current = null
+            setGenerating(false)
+            setError('Generation failed — check Drafts for details')
+          }
+        } catch {
+          // transient error, keep polling
+        }
+      }, 2000)
+
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Generation failed')
-    } finally {
       setGenerating(false)
     }
   }
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
 
   const discoveryDocs = documents.filter(d =>
     d.document_type === 'discovery_excel' || d.document_type === 'other'
@@ -217,58 +245,49 @@ export default function GeneratePage() {
         </button>
       </div>
 
-      {/* Result */}
-      {draft && draft.status === 'completed' && draft.content && (
+      {/* Inline progress panel — shown while generating */}
+      {progress && (
         <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <h2 className="font-semibold text-lg">Generated TIP</h2>
+          <div className="flex items-center gap-3">
+            {progress.status === 'generating' ? (
+              <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+            ) : (
+              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <p className="font-medium text-gray-900">{progress.title}</p>
+              {progress.status === 'generating' && (
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {progress.totalChunks > 0
+                    ? `Generating section ${progress.chunk} of ${progress.totalChunks}…`
+                    : 'Starting generation…'}
+                </p>
+              )}
+              {progress.status === 'completed' && (
+                <p className="text-sm text-green-600 mt-0.5">Complete — redirecting…</p>
+              )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-gray-500">
-              {draft.claude_model && <span>{draft.claude_model}</span>}
-              {draft.generation_tokens && <span>{draft.generation_tokens.toLocaleString()} tokens</span>}
-              <button
-                onClick={() => setShowRaw(!showRaw)}
-                className="flex items-center gap-1 px-3 py-1 border rounded-lg hover:bg-gray-50 text-gray-600"
-              >
-                {showRaw ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                {showRaw ? 'Formatted' : 'Raw'}
-              </button>
-            </div>
+            {progress.tokens && (
+              <span className="text-xs text-gray-400">{progress.tokens.toLocaleString()} tokens</span>
+            )}
           </div>
 
-          {showRaw ? (
-            <pre className="bg-gray-50 rounded-lg p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-[600px] border">
-              {draft.content}
-            </pre>
-          ) : (
-            <div className="prose prose-sm max-w-none max-h-[600px] overflow-y-auto border rounded-lg p-6 bg-gray-50">
-              {draft.content.split('\n').map((line, i) => {
-                if (line.startsWith('# ')) return <h1 key={i} className="text-xl font-bold mt-4 mb-2">{line.slice(2)}</h1>
-                if (line.startsWith('## ')) return <h2 key={i} className="text-lg font-semibold mt-4 mb-2">{line.slice(3)}</h2>
-                if (line.startsWith('### ')) return <h3 key={i} className="text-base font-semibold mt-3 mb-1">{line.slice(4)}</h3>
-                if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4">{line.slice(2)}</li>
-                if (line.trim() === '') return <br key={i} />
-                return <p key={i} className="mb-1">{line}</p>
-              })}
+          {progress.totalChunks > 0 && (
+            <div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((progress.chunk / progress.totalChunks) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>Chunk {progress.chunk} / {progress.totalChunks}</span>
+                <span>{Math.round((progress.chunk / progress.totalChunks) * 100)}%</span>
+              </div>
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-2 border-t text-sm text-gray-500">
-            <span>Draft ID: {draft.id} · <a href="/drafts" className="text-blue-600 hover:underline">View all drafts</a></span>
-            <span>Generated {new Date(draft.generated_at!).toLocaleString()}</span>
-          </div>
-        </div>
-      )}
-
-      {draft && draft.status === 'failed' && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-          <div className="flex items-center gap-2 text-red-700 font-medium mb-2">
-            <AlertCircle className="w-5 h-5" />
-            Generation Failed
-          </div>
-          <p className="text-sm text-red-600">{draft.content}</p>
+          <p className="text-xs text-gray-400">Large documents take 2–4 minutes. You'll be taken directly to the draft when done.</p>
         </div>
       )}
     </div>

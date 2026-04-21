@@ -177,6 +177,38 @@ async def get_draft(
     
     return draft
 
+@router.get("/drafts/{draft_id}/progress")
+async def get_draft_progress(draft_id: int, db: Session = Depends(get_db)):
+    """
+    Lightweight polling endpoint — returns status and chunk progress only.
+    Does NOT return content. Use this during generation instead of GET /drafts/{id}.
+    """
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    progress = None
+    if draft.generation_prompt:
+        try:
+            p = json.loads(draft.generation_prompt)
+            if p.get("mode") == "chunked":
+                progress = {
+                    "chunk": p.get("chunk", 0),
+                    "total_chunks": p.get("total_chunks", 0),
+                    "sections": p.get("sections", 0),
+                }
+        except Exception:
+            pass
+
+    return {
+        "draft_id": draft.id,
+        "status": draft.status,
+        "title": draft.title,
+        "progress": progress,
+        "generation_tokens": draft.generation_tokens,
+    }
+
+
 @router.delete("/drafts/{draft_id}")
 async def delete_draft(draft_id: int, db: Session = Depends(get_db)):
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
