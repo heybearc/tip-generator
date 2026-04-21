@@ -862,3 +862,57 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+@router.get("/drafts/{draft_id}/export/pdf")
+async def export_draft_pdf(draft_id: int, db: Session = Depends(get_db)):
+    """Export a completed draft as a PDF using LibreOffice headless conversion."""
+    import subprocess
+    import tempfile
+    import os as _os
+    import re as _re
+
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if not draft.content:
+        raise HTTPException(status_code=400, detail="Draft has no content to export")
+
+    # Build docx bytes by calling the existing export route handler directly
+    response = await export_draft_docx(draft_id, db)
+    docx_bytes = b"".join([chunk async for chunk in response.body_iterator])
+
+    safe_title = _re.sub(r'[^\w\s-]', '', draft.title).strip().replace(' ', '_')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        docx_path = _os.path.join(tmpdir, f"{safe_title}.docx")
+        pdf_path = _os.path.join(tmpdir, f"{safe_title}.pdf")
+
+        with open(docx_path, 'wb') as f:
+            f.write(docx_bytes)
+
+        # LibreOffice headless conversion
+        result = subprocess.run(
+            [
+                "libreoffice", "--headless", "--convert-to", "pdf",
+                "--outdir", tmpdir, docx_path
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        if result.returncode != 0 or not _os.path.exists(pdf_path):
+            raise HTTPException(
+                status_code=500,
+                detail=f"PDF conversion failed: {result.stderr or result.stdout}"
+            )
+
+        pdf_bytes = open(pdf_path, 'rb').read()
+
+    filename = f"{safe_title}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

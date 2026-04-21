@@ -270,6 +270,7 @@ export default function DraftViewPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false)
@@ -324,6 +325,26 @@ export default function DraftViewPage() {
       setError('Export failed')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    if (!draft) return
+    setExportingPdf(true)
+    try {
+      const res = await axios.get(`${API_URL}/generate/drafts/${draft.id}/export/pdf`, {
+        responseType: 'blob'
+      })
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${draft.title.replace(/[^\w\s-]/g, '').trim()}.pdf`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setError('PDF export failed')
+    } finally {
+      setExportingPdf(false)
     }
   }
 
@@ -402,14 +423,26 @@ export default function DraftViewPage() {
             <MessageSquare className="w-4 h-4" />
             AI Assist
           </button>
-          <button
-            onClick={handleExport}
-            disabled={exporting || draft.status !== 'completed'}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            Export .docx
-          </button>
+          <div className="flex rounded-lg overflow-hidden border border-green-600 disabled:opacity-50">
+            <button
+              onClick={handleExport}
+              disabled={exporting || exportingPdf || draft.status !== 'completed'}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed border-r border-green-500"
+              title="Download as Word document"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              .docx
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={exporting || exportingPdf || draft.status !== 'completed'}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download as PDF"
+            >
+              {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              .pdf
+            </button>
+          </div>
         </div>
       </div>
 
