@@ -115,11 +115,6 @@ async def callback(
     if error:
         return RedirectResponse(f"{FRONTEND_URL}/login?error={error}")
 
-    # Validate state
-    stored_state = request.cookies.get("oauth_state", "")
-    if not state or state != stored_state:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=state_mismatch")
-
     # Exchange code for tokens
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
