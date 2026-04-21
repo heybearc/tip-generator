@@ -1,0 +1,14 @@
+{
+  "name": "tip-generator-tests",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for TIP Generator",
+  "scripts": {
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "dotenv": "^16.0.0"
+  }
+}
