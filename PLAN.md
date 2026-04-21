@@ -81,16 +81,14 @@
 
 ## Upcoming Phases
 
-### Phase 1.7: Generation Progress UX (NEXT)
+### Phase 1.7: Generation Progress UX ✅
 **Objective:** Better feedback during long-running chunked generation
 
-**Tasks:**
-- Progress indicator showing chunk completion (e.g. "Generating section 3 of 13...")
-- WebSocket or polling endpoint for generation status
-- Estimated time remaining
-- Cancel generation mid-run
-
-**Development:** Blue container (CT190) only
+- ✅ `GET /api/generate/drafts/{id}/progress` lightweight polling endpoint
+- ✅ Inline progress panel on GeneratePage (no redirect) — polls every 2s
+- ✅ Progress bar shows batch X of Y (Claude API calls), token count
+- ✅ Auto-navigates to draft on completion
+- ✅ Released in v0.2.0 — 2026-04-21
 
 ### Phase 1.8: Authentication
 **Objective:** Authentik OAuth2/OIDC, protected routes, user sessions
@@ -103,7 +101,6 @@
 ## Prioritized Backlog
 
 ### High Priority
-- **Generation progress UX** (Phase 1.7) — chunked runs take 2-4 min with no feedback
 - **Authentication** (Phase 1.8) — Authentik OAuth2/OIDC, protected routes, user sessions
 - **PDF export** — convert docx to PDF (LibreOffice headless or WeasyPrint)
 - **Excel parser tuning** — validate against real discovery workbooks, handle edge cases (merged cells, dropdowns, nested tables)
@@ -123,12 +120,12 @@
 - **Template library** — multiple named templates, select per generation
 - **Analytics** — token usage tracking, generation time, cost estimation
 - **API tests** — pytest suite for all endpoints
-- **E2E tests** — Playwright workflow tests
+- **E2E tests** — ✅ Playwright suite live on qa-01 (`/opt/tests/tip-generator/`) — 26/26 passing
 
 ---
 
 ## Known Issues / Watch Items
-- Chunked generation has no UI progress feedback (Phase 1.7)
+- ~~Chunked generation has no UI progress feedback~~ — **fixed v0.2.0** (inline progress panel + `/progress` endpoint)
 - AI Assist was silently timing out (sync Claude call blocking async event loop) — **fixed 2026-04-20** via ThreadPoolExecutor
 - Revision History was pulling date from discovery doc instead of server date — **fixed 2026-04-20** (deterministic post-process on generation + refine)
 - **Revision History author** shows `"TIP Generator Admin"` until real auth is implemented — blocked on Phase 1.8
