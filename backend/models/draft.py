@@ -37,6 +37,7 @@ class Draft(Base):
     claude_model = Column(String, nullable=True)
     generation_prompt = Column(Text, nullable=True)
     generation_tokens = Column(Integer, nullable=True)
+    celery_task_id = Column(String, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

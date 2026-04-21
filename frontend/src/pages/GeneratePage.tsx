@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Wand2, FileText, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, XCircle } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -38,6 +38,7 @@ export default function GeneratePage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [progress, setProgress] = useState<ProgressState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -119,6 +120,22 @@ export default function GeneratePage() {
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Generation failed')
       setGenerating(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!progress?.draftId || cancelling) return
+    setCancelling(true)
+    try {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      await axios.post(`${API_URL}/generate/drafts/${progress.draftId}/cancel`)
+      setGenerating(false)
+      setProgress(null)
+      setError('Generation cancelled.')
+    } catch {
+      setError('Cancel failed — generation may still be running.')
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -269,6 +286,16 @@ export default function GeneratePage() {
             </div>
             {progress.tokens && (
               <span className="text-xs text-gray-400">{progress.tokens.toLocaleString()} tokens</span>
+            )}
+            {progress.status === 'generating' && (
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+              >
+                {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                Cancel
+              </button>
             )}
           </div>
 

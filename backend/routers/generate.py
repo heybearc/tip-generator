@@ -88,7 +88,9 @@ async def generate_tip(
     draft.status = DraftStatus.GENERATING
     db.commit()
 
-    generate_tip_task.delay(draft.id, template_file_id)
+    task = generate_tip_task.delay(draft.id, template_file_id)
+    draft.celery_task_id = task.id
+    db.commit()
 
     return GenerateTIPResponse(
         message="TIP generation started",
@@ -207,6 +209,23 @@ async def get_draft_progress(draft_id: int, db: Session = Depends(get_db)):
         "progress": progress,
         "generation_tokens": draft.generation_tokens,
     }
+
+
+@router.post("/drafts/{draft_id}/cancel")
+async def cancel_draft(draft_id: int, db: Session = Depends(get_db)):
+    """Cancel an in-progress generation: revoke the Celery task and mark draft as failed."""
+    from celery_app import celery
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if draft.status != DraftStatus.GENERATING:
+        raise HTTPException(status_code=400, detail="Draft is not currently generating")
+    if draft.celery_task_id:
+        celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM")
+    draft.status = DraftStatus.FAILED
+    draft.celery_task_id = None
+    db.commit()
+    return {"message": "Generation cancelled", "id": draft_id}
 
 
 @router.delete("/drafts/{draft_id}")
