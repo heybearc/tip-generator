@@ -116,10 +116,6 @@ async def callback(
     db: Session = Depends(get_db),
 ):
     """Handle Authentik redirect: exchange code for tokens, upsert user, set cookie."""
-    import logging
-    log = logging.getLogger("tip.auth")
-    log.warning(f"CALLBACK hit: code={'YES' if code else 'NO'} error={error!r} redirect_uri={REDIRECT_URI!r}")
-
     if error:
         return RedirectResponse(f"{FRONTEND_URL}/login?error={error}")
 
@@ -138,8 +134,6 @@ async def callback(
             timeout=15,
         )
 
-    log.warning(f"TOKEN response: status={token_resp.status_code} body={token_resp.text[:300]}")
-
     if token_resp.status_code != 200:
         return RedirectResponse(f"{FRONTEND_URL}/login?error=token_exchange_failed")
 
@@ -152,14 +146,11 @@ async def callback(
         payload_b64 = id_token.split(".")[1]
         payload_b64 += "=" * (4 - len(payload_b64) % 4)
         info = _json.loads(base64.urlsafe_b64decode(payload_b64))
-        log.warning(f"ID TOKEN claims: {list(info.keys())} sub={info.get('sub','?')[:16]}")
-    except Exception as e:
-        log.warning(f"ID TOKEN decode failed: {e} — falling back to userinfo")
+    except Exception:
         info = {}
 
     sub = info.get("sub", "")
     if not sub:
-        log.warning("ID TOKEN has no sub — cannot identify user")
         return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
 
     # Always fetch userinfo for email/name — id_token only contains sub+aud+iss
@@ -170,7 +161,6 @@ async def callback(
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10,
         )
-    log.warning(f"USERINFO: status={userinfo_resp.status_code} body={userinfo_resp.text[:200]}")
     if userinfo_resp.status_code == 200:
         profile = userinfo_resp.json()
         info.update(profile)
