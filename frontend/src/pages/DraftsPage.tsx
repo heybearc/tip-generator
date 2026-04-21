@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -37,6 +37,8 @@ export default function DraftsPage() {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -68,6 +70,27 @@ export default function DraftsPage() {
       setLoading(false)
     }
   }
+
+  const startRename = (e: { stopPropagation: () => void }, draft: Draft) => {
+    e.stopPropagation()
+    setRenamingId(draft.id)
+    setRenameValue(draft.title)
+  }
+
+  const commitRename = async (draftId: number) => {
+    const trimmed = renameValue.trim()
+    if (!trimmed) { cancelRename(); return }
+    try {
+      await axios.patch(`${API_URL}/generate/drafts/${draftId}`, { content: '', title: trimmed })
+      setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, title: trimmed } : d))
+    } catch {
+      setError('Rename failed')
+    } finally {
+      setRenamingId(null)
+    }
+  }
+
+  const cancelRename = () => { setRenamingId(null); setRenameValue('') }
 
   const handleDelete = async (e: { stopPropagation: () => void }, draftId: number) => {
     e.stopPropagation()
@@ -144,12 +167,27 @@ export default function DraftsPage() {
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 {statusIcon(draft.status)}
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900">{draft.title}</div>
+                  {renamingId === draft.id ? (
+                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') commitRename(draft.id); if (e.key === 'Escape') cancelRename() }}
+                        onBlur={() => commitRename(draft.id)}
+                        className="flex-1 text-sm font-medium border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button onMouseDown={() => commitRename(draft.id)} className="p-1 text-green-600 hover:bg-green-50 rounded"><Check className="w-3.5 h-3.5" /></button>
+                      <button onMouseDown={cancelRename} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <div className="font-medium text-gray-900">{draft.title}</div>
+                  )}
                   <div className="text-xs text-gray-500 mt-0.5">
                     {new Date(draft.created_at).toLocaleString()}
                     {draft.generation_tokens && ` · ${draft.generation_tokens.toLocaleString()} tokens`}
                   </div>
-                  {draft.status === 'generating' && (() => {
+                  {renamingId !== draft.id && draft.status === 'generating' && (() => {
                     const p = parseProgress(draft.generation_prompt)
                     if (!p) return null
                     const pct = p.total_chunks > 0 ? Math.round((p.chunk / p.total_chunks) * 100) : 0
@@ -174,6 +212,15 @@ export default function DraftsPage() {
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass(draft.status)}`}>
                   {draft.status}
                 </span>
+                {renamingId !== draft.id && (
+                  <button
+                    onClick={e => startRename(e, draft)}
+                    className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                    title="Rename draft"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={e => handleDelete(e, draft.id)}
                   className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"

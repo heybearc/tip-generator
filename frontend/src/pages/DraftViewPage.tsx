@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -271,6 +271,8 @@ export default function DraftViewPage() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [renamingTitle, setRenamingTitle] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false)
@@ -292,6 +294,26 @@ export default function DraftViewPage() {
       setError('Failed to load draft')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const startRenameTitle = () => {
+    if (!draft) return
+    setRenameValue(draft.title)
+    setRenamingTitle(true)
+  }
+
+  const commitRenameTitle = async () => {
+    if (!draft) return
+    const trimmed = renameValue.trim()
+    if (!trimmed) { setRenamingTitle(false); return }
+    try {
+      await axios.patch(`${API_URL}/generate/drafts/${draft.id}`, { content: '', title: trimmed })
+      setDraft(prev => prev ? { ...prev, title: trimmed } : prev)
+    } catch {
+      setError('Rename failed')
+    } finally {
+      setRenamingTitle(false)
     }
   }
 
@@ -400,7 +422,27 @@ export default function DraftViewPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{draft.title}</h1>
+            {renamingTitle ? (
+              <div className="flex items-center gap-1">
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') commitRenameTitle(); if (e.key === 'Escape') setRenamingTitle(false) }}
+                  onBlur={commitRenameTitle}
+                  className="text-xl font-bold text-gray-900 border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-96"
+                />
+                <button onMouseDown={commitRenameTitle} className="p-1 text-green-600 hover:bg-green-50 rounded"><Check className="w-4 h-4" /></button>
+                <button onMouseDown={() => setRenamingTitle(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-gray-900">{draft.title}</h1>
+                <button onClick={startRenameTitle} className="p-1 text-gray-300 hover:text-blue-500 rounded transition-colors" title="Rename">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5 flex-wrap">
               <span className={`px-2 py-0.5 rounded-full font-medium ${
                 draft.status === 'completed' ? 'bg-green-100 text-green-700' :
