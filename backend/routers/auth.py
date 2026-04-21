@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from database import get_db
 from models.user import User
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"], redirect_slashes=False)
 
 # --- Config from .env ---
 AUTHENTIK_DOMAIN    = os.getenv("AUTHENTIK_DOMAIN", "auth.cloudigan.net")
