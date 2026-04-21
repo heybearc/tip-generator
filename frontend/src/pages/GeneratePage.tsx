@@ -259,7 +259,7 @@ export default function GeneratePage() {
               {progress.status === 'generating' && (
                 <p className="text-sm text-gray-500 mt-0.5">
                   {progress.totalChunks > 0
-                    ? `Generating section ${progress.chunk} of ${progress.totalChunks}…`
+                    ? `Processing batch ${progress.chunk} of ${progress.totalChunks}…`
                     : 'Starting generation…'}
                 </p>
               )}
