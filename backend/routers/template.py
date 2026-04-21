@@ -7,8 +7,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database.config import get_db
 from models.template_file import TemplateFile
+from models.user import User as UserModel
 from schemas.template_file import TemplateFileResponse, TemplateFileUploadResponse
 from services.template_parser import parse_template_file
+from routers.auth import get_current_user
 from pathlib import Path
 import os
 import json
@@ -16,9 +18,6 @@ from services.upload import UploadService
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 upload_service = UploadService()
-
-# Temporary: hardcoded user_id until we implement auth
-TEMP_USER_ID = 1
 
 @router.get("/current", response_model=TemplateFileResponse)
 async def get_current_template(db: Session = Depends(get_db)):
@@ -53,7 +52,8 @@ async def get_template_history(
 async def upload_template(
     file: UploadFile = File(...),
     notes: str = "",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
     Upload a new TIP template (Word document)
@@ -114,7 +114,7 @@ async def upload_template(
             file_size=file_size,
             version=next_version,
             is_active=True,
-            uploaded_by=TEMP_USER_ID,
+            uploaded_by=current_user.id,
             notes=notes or f"Template version {next_version}",
             template_structure=structure_json
         )

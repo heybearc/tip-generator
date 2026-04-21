@@ -299,12 +299,13 @@ async def refine_section_guided(
     draft_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    claude_service: ClaudeService = Depends(get_claude_service)
+    claude_service: ClaudeService = Depends(get_claude_service),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """Refine a single section using the template instruction for that section type."""
     import os, json as _json
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
@@ -471,7 +472,7 @@ Rewrite this section following the rules above."""
 
 
 @router.get("/drafts/{draft_id}/export")
-async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
+async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """Export a completed draft as a formatted Word (.docx) document."""
     from docx import Document as DocxDocument
     from docx.shared import Pt, RGBColor, Inches, Cm
@@ -481,7 +482,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
     from docx.enum.style import WD_STYLE_TYPE
     import re, copy
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if not draft.content:
@@ -901,21 +902,21 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/drafts/{draft_id}/export/pdf")
-async def export_draft_pdf(draft_id: int, db: Session = Depends(get_db)):
+async def export_draft_pdf(draft_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """Export a completed draft as a PDF using LibreOffice headless conversion."""
     import subprocess
     import tempfile
     import os as _os
     import re as _re
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == TEMP_USER_ID).first()
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     if not draft.content:
         raise HTTPException(status_code=400, detail="Draft has no content to export")
 
     # Build docx bytes by calling the existing export route handler directly
-    response = await export_draft_docx(draft_id, db)
+    response = await export_draft_docx(draft_id, db, current_user)
     docx_bytes = b"".join([chunk async for chunk in response.body_iterator])
 
     safe_title = _re.sub(r'[^\w\s-]', '', draft.title).strip().replace(' ', '_')
