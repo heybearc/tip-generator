@@ -144,22 +144,33 @@ async def callback(
         return RedirectResponse(f"{FRONTEND_URL}/login?error=token_exchange_failed")
 
     tokens = token_resp.json()
-    access_token = tokens.get("access_token")
+    id_token = tokens.get("id_token", "")
 
-    # Fetch user info
-    async with httpx.AsyncClient() as client:
-        userinfo_resp = await client.get(
-            USERINFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=10,
-        )
+    # Decode id_token claims directly (skip signature verification — Authentik is trusted internal IdP)
+    try:
+        import base64, json as _json
+        payload_b64 = id_token.split(".")[1]
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        info = _json.loads(base64.urlsafe_b64decode(payload_b64))
+        log.warning(f"ID TOKEN claims: {list(info.keys())} sub={info.get('sub','?')[:16]}")
+    except Exception as e:
+        log.warning(f"ID TOKEN decode failed: {e} — falling back to userinfo")
+        info = {}
 
-    log.warning(f"USERINFO response: status={userinfo_resp.status_code} body={userinfo_resp.text[:300]}")
+    # Fallback to userinfo if id_token decode failed
+    if not info.get("sub"):
+        access_token = tokens.get("access_token")
+        async with httpx.AsyncClient() as client:
+            userinfo_resp = await client.get(
+                USERINFO_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10,
+            )
+        log.warning(f"USERINFO fallback: status={userinfo_resp.status_code}")
+        if userinfo_resp.status_code != 200:
+            return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
+        info = userinfo_resp.json()
 
-    if userinfo_resp.status_code != 200:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
-
-    info = userinfo_resp.json()
     sub      = info.get("sub", "")
     email    = info.get("email", "")
     name     = info.get("name", "") or info.get("preferred_username", email)
