@@ -112,6 +112,10 @@ async def callback(
     db: Session = Depends(get_db),
 ):
     """Handle Authentik redirect: exchange code for tokens, upsert user, set cookie."""
+    import logging
+    log = logging.getLogger("tip.auth")
+    log.warning(f"CALLBACK hit: code={'YES' if code else 'NO'} error={error!r} redirect_uri={REDIRECT_URI!r}")
+
     if error:
         return RedirectResponse(f"{FRONTEND_URL}/login?error={error}")
 
@@ -130,6 +134,8 @@ async def callback(
             timeout=15,
         )
 
+    log.warning(f"TOKEN response: status={token_resp.status_code} body={token_resp.text[:300]}")
+
     if token_resp.status_code != 200:
         return RedirectResponse(f"{FRONTEND_URL}/login?error=token_exchange_failed")
 
@@ -143,6 +149,8 @@ async def callback(
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10,
         )
+
+    log.warning(f"USERINFO response: status={userinfo_resp.status_code} body={userinfo_resp.text[:300]}")
 
     if userinfo_resp.status_code != 200:
         return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
