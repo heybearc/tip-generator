@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import Base, engine, get_db
 import models  # Import models to register them with Base
-from routers import upload_router, generate_router, template_router
+from routers import upload_router, generate_router, template_router, release_notes_router
 import os
 
 # Create database tables
@@ -17,13 +17,14 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="TIP Generator API",
     description="AI-powered Technical Implementation Plan generator using Claude API",
-    version="0.1.0"
+    version="0.2.0"
 )
 
 # Include routers
 app.include_router(upload_router)
 app.include_router(generate_router)
 app.include_router(template_router)
+app.include_router(release_notes_router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -66,7 +67,7 @@ async def root():
     """Root endpoint"""
     return {
         "message": "TIP Generator API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "status": "running"
     }
 

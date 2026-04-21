@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FileText, Upload, FolderOpen, Settings, Files, Wand2 } from 'lucide-react'
+import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen } from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -87,6 +87,28 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <Settings className="h-4 w-4 mr-1" />
                 Template
+              </Link>
+              <Link
+                to="/release-notes"
+                className={`px-3 py-2 rounded-md text-sm font-medium flex items-center ${
+                  isActive('/release-notes')
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <BookOpen className="h-4 w-4 mr-1" />
+                What's New
+              </Link>
+              <Link
+                to="/help"
+                className={`px-3 py-2 rounded-md text-sm font-medium flex items-center ${
+                  location.pathname.startsWith('/help')
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <HelpCircle className="h-4 w-4 mr-1" />
+                Help
               </Link>
             </nav>
           </div>
