@@ -221,7 +221,33 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         "username": current_user.username,
         "full_name": current_user.full_name,
         "has_claude_api_key": bool(current_user.claude_api_key),
+        "claude_model": current_user.claude_model,
     }
+
+
+@router.get("/profile/models")
+async def list_claude_models(current_user: User = Depends(get_current_user)):
+    """Fetch available Claude models from Anthropic using the user's API key."""
+    if not current_user.claude_api_key:
+        raise HTTPException(status_code=402, detail="No Claude API key configured.")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.anthropic.com/v1/models",
+            headers={
+                "x-api-key": current_user.claude_api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            timeout=10,
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch models from Anthropic.")
+    data = resp.json()
+    models = [
+        {"id": m["id"], "display_name": m.get("display_name", m["id"])}
+        for m in data.get("data", [])
+        if "claude" in m["id"].lower()
+    ]
+    return {"models": models}
 
 
 @router.patch("/profile")
@@ -230,12 +256,14 @@ async def update_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update user profile. Accepts: claude_api_key (set or clear), full_name."""
+    """Update user profile. Accepts: claude_api_key (set or clear), full_name, claude_model."""
     if "claude_api_key" in body:
         key = body["claude_api_key"]
         current_user.claude_api_key = key.strip() if key else None
     if "full_name" in body:
         current_user.full_name = body["full_name"]
+    if "claude_model" in body:
+        current_user.claude_model = body["claude_model"] or None
     db.commit()
     db.refresh(current_user)
     return {
@@ -244,6 +272,7 @@ async def update_profile(
         "username": current_user.username,
         "full_name": current_user.full_name,
         "has_claude_api_key": bool(current_user.claude_api_key),
+        "claude_model": current_user.claude_model,
     }
 
 

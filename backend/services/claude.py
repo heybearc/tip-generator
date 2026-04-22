@@ -19,9 +19,9 @@ SECTION_CHUNK_SIZE = 5            # Sections per chunk in chunked mode
 class ClaudeService:
     """Service for interacting with Claude API"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key
-        self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+        self.model = model or os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
         self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", "8000"))
 
         if not self.api_key:

@@ -104,7 +104,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             except Exception:
                 pass
 
-        claude = ClaudeService(api_key=user.claude_api_key)
+        claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
         updated_draft = asyncio.run(
             claude.generate_tip(
                 draft=draft,

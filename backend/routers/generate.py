@@ -23,7 +23,7 @@ def get_claude_service_for_user(user: UserModel) -> ClaudeService:
     if not user.claude_api_key:
         from fastapi import HTTPException
         raise HTTPException(status_code=402, detail="No Claude API key configured. Add your Anthropic API key in your profile settings.")
-    return ClaudeService(api_key=user.claude_api_key)
+    return ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
 
 @router.post("/draft", response_model=DraftResponse)
 async def create_draft(

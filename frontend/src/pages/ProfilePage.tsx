@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, Save, Trash2 } from 'lucide-react'
+import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, Save, Trash2, RefreshCw, Cpu } from 'lucide-react'
 import axios from 'axios'
 
 interface Profile {
@@ -8,6 +8,12 @@ interface Profile {
   username: string
   full_name: string | null
   has_claude_api_key: boolean
+  claude_model: string | null
+}
+
+interface Model {
+  id: string
+  display_name: string
 }
 
 export default function ProfilePage() {
@@ -16,14 +22,33 @@ export default function ProfilePage() {
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [models, setModels] = useState<Model[]>([])
+  const [loadingModels, setLoadingModels] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<string>('')
 
   useEffect(() => {
     axios.get('/api/auth/profile', { withCredentials: true })
-      .then(r => setProfile(r.data))
+      .then(r => {
+        setProfile(r.data)
+        setSelectedModel(r.data.claude_model || '')
+        if (r.data.has_claude_api_key) fetchModels()
+      })
       .catch(() => setMessage({ type: 'error', text: 'Failed to load profile.' }))
   }, [])
 
-  const handleSave = async () => {
+  const fetchModels = async () => {
+    setLoadingModels(true)
+    try {
+      const r = await axios.get('/api/auth/profile/models', { withCredentials: true })
+      setModels(r.data.models)
+    } catch {
+      setModels([])
+    } finally {
+      setLoadingModels(false)
+    }
+  }
+
+  const handleSaveKey = async () => {
     if (!apiKey.trim()) return
     setSaving(true)
     setMessage(null)
@@ -32,10 +57,22 @@ export default function ProfilePage() {
       setProfile(r.data)
       setApiKey('')
       setMessage({ type: 'success', text: 'API key saved.' })
+      fetchModels()
     } catch {
       setMessage({ type: 'error', text: 'Failed to save API key.' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveModel = async (modelId: string) => {
+    setSelectedModel(modelId)
+    try {
+      const r = await axios.patch('/api/auth/profile', { claude_model: modelId }, { withCredentials: true })
+      setProfile(r.data)
+      setMessage({ type: 'success', text: `Model set to ${modelId}.` })
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to save model.' })
     }
   }
 
@@ -112,7 +149,7 @@ export default function ProfilePage() {
                 onChange={e => setApiKey(e.target.value)}
                 placeholder="sk-ant-..."
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={e => e.key === 'Enter' && handleSave()}
+                onKeyDown={e => e.key === 'Enter' && handleSaveKey()}
               />
               <button
                 type="button"
@@ -123,7 +160,7 @@ export default function ProfilePage() {
               </button>
             </div>
             <button
-              onClick={handleSave}
+              onClick={handleSaveKey}
               disabled={saving || !apiKey.trim()}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
