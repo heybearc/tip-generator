@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-22  
-**Current phase:** Phase 2 — BYOK + Admin  
-**Status:** v0.5.0 released; BYOK complete
+**Current phase:** Phase 2.1 — Admin Dashboard  
+**Status:** v0.5.0 released; BYOK complete; starting admin dashboard
 
 ---
 
@@ -13,14 +13,16 @@
 
 ---
 
-## Current Phase: Export Quality + Generation Discipline
+## Current Phase: Admin, Library & Collaboration
 
 ### Active Work (IN PROGRESS)
 - ✅ Draft duplicate — `POST /api/generate/drafts/{id}/duplicate`
 - ✅ Gap/suggestion report — `GET /api/generate/drafts/{id}/gaps` + Gaps panel in DraftViewPage
 - ✅ BYOK Claude API key — per-user key, no fallback, dynamic model selector
 - ✅ Dynamic OAuth redirect — `_base_url(request)` replaces hardcoded env vars
-- ⏳ Next: Admin dashboard or Excel parser tuning
+- ⏳ **Phase 2.1: Admin dashboard** — user list, deactivate, API key status, usage stats
+- ⏳ **Phase 2.2: TIP Library** — admin-managed, globally visible, few-shot injection, RAG-ready schema
+- ⏳ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
 
 ---
 
@@ -158,18 +160,32 @@
 - ⏳ Authentication — Authentik OAuth2/OIDC (1.8)
 - ⏳ PDF export
 
-### Phase 2: Admin & Multi-User (Future)
-- **User management** — create/edit/deactivate users, role-based permissions (Admin, Editor, Viewer)
-- **User profile settings** — display name, email, preferences
-- **BYOK (Bring Your Own Key)** — each user can store their own Claude API key in their profile; generation uses the logged-in user's key, falling back to the system key if none set
-- **Template library management** — multiple named templates, select per generation
-- **Draft sharing and collaboration** — share drafts between users
-- **Audit logging** — who generated/edited/exported what and when
-- **Admin dashboard** — user list, usage stats, API key status per user
+### Phase 2.1: Admin Dashboard (Next up)
+- User list — name, email, role, API key status (set/not set), active/inactive
+- Deactivate/reactivate users (admin only)
+- Role enforcement — `admin` vs `user` enforced at API level (currently implied only)
+- Usage stats per user — token counts, generation count
+
+### Phase 2.2: TIP Library
+- Admin uploads library TIPs (Word/PDF) with metadata: title, category (e.g. "M365 Migration", "Cloud Migration")
+- Globally visible, read-only for non-admins
+- User contribution flow — submit a doc as library candidate → admin approves/rejects
+- Generation integration — library TIPs injected as few-shot reference at generation time
+- RAG-ready schema — embedding fields on `library_documents` table for future pgvector (D-LOCAL-014)
+
+### Phase 2.3: Draft Collaboration
+- Drafts editable only by owner + admins (read-only for all other users)
+- Invite to collaborate — owner invites specific users by username/email to edit a draft
+- Documents (uploads) globally visible — any user can use any doc as generation source material
+
+### Phase 2.4: RAG Embeddings (when library is populated)
+- pgvector extension on existing Postgres (no new infra)
+- Embed library TIPs on upload via Voyage-3 or equivalent
+- Retrieve top-k relevant chunks at generation time, inject into Claude prompt
+- Prerequisite: Phase 2.2 library must have meaningful content before this adds value
 
 ### Phase 3: Advanced Features (Future)
 - AI-powered template suggestions
 - Batch processing
-- Advanced analytics and reporting (token usage, cost per generation, estimated cost with BYOK keys)
+- Advanced analytics — token usage, cost per generation, cost with BYOK keys
 - Template version control
-- Gap/suggestion report — auto-list all `[DATA NEEDED:]` placeholders in a generated TIP

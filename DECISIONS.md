@@ -119,6 +119,21 @@ When adding a decision, use this format:
 - **Why:** Eliminates the need to mutate `.env` files when testing against non-LIVE domains (blue-tip, green-tip). All three Authentik redirect URIs are pre-registered.
 - **When:** 2026-04-22
 
+## D-LOCAL-014: TIP Library — few-shot first, RAG-ready schema from day 1
+- **Decision:** Phase 2.2 library uses few-shot injection (library TIPs injected as reference into Claude prompt at generation time). Schema designed for pgvector embeddings from day 1 so Phase 2.4 (RAG) requires no migration.
+- **Why:** RAG adds real value only when the library has meaningful content. Few-shot is simpler, faster to build, and often produces equivalent quality for structured documents like TIPs. Building the RAG-ready schema now avoids a costly migration later.
+- **When:** 2026-04-22
+- **Schema:** `library_documents` table with `title`, `category`, `file_path`, `extracted_text`, `embedding` (nullable vector field), `status` (`active` | `pending` | `rejected`), `submitted_by`, `approved_by`
+- **Embedding model (Phase 2.4):** Voyage-3 or `text-embedding-3-small` — decision deferred until library is populated
+- **Alternatives considered:** RAG from day 1 (premature, empty library produces no value), fine-tuning (too expensive, requires large dataset)
+
+## D-LOCAL-015: Document and draft visibility model
+- **Decision:** Documents (uploads) are globally visible to all users. Drafts are owner-locked — editable only by owner + admins. Draft owners can invite specific users to collaborate (edit access). Library TIPs are admin-managed, globally readable, no user edits.
+- **Why:** Global document visibility enables reuse of source material across the team without complex permission management. Owner-locked drafts prevent accidental edits while still supporting intentional collaboration via explicit invite. Fits a small, trusted team.
+- **When:** 2026-04-22
+- **Roles:** `admin` (full access to all drafts, library management, user management), `user` (own drafts + invited drafts editable, all others read-only)
+- **Implementation:** `draft_collaborators` join table for invite-to-edit; document table has no `owner_id` filter on read queries
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.

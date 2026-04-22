@@ -14,6 +14,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  )
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.is_superuser) return <Navigate to="/" replace />
+  return <>{children}</>
+}
 import HomePage from './pages/HomePage'
 import UploadPage from './pages/UploadPage'
 import DraftsPage from './pages/DraftsPage'
@@ -29,6 +41,7 @@ import UploadDocumentsPage from './pages/help/UploadDocumentsPage'
 import GenerateTipPage from './pages/help/GenerateTipPage'
 import ManageDraftsPage from './pages/help/ManageDraftsPage'
 import TemplateManagementHelpPage from './pages/help/TemplateManagementPage'
+import AdminUsersPage from './pages/AdminUsersPage'
 
 function App() {
   return (
@@ -54,6 +67,7 @@ function App() {
         <Route path="/help/template-management" element={<TemplateManagementHelpPage />} />
         <Route path="/release-notes" element={<ReleaseNotesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
             </Routes>
           </Layout>
         </ProtectedRoute>

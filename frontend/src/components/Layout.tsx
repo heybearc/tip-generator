@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen, LogOut, User, KeyRound } from 'lucide-react'
+import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen, LogOut, User, KeyRound, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface LayoutProps {
@@ -101,6 +101,19 @@ export default function Layout({ children }: LayoutProps) {
                 <BookOpen className="h-4 w-4 mr-1" />
                 What's New
               </Link>
+              {user?.is_superuser && (
+                <Link
+                  to="/admin/users"
+                  className={`px-3 py-2 rounded-md text-sm font-medium flex items-center ${
+                    location.pathname.startsWith('/admin/users')
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-1" />
+                  Admin
+                </Link>
+              )}
               <Link
                 to="/help"
                 className={`px-3 py-2 rounded-md text-sm font-medium flex items-center ${
