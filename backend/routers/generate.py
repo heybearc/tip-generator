@@ -183,11 +183,12 @@ async def refine_draft(
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
     draft = _get_draft_readable(db, draft_id, current_user)
-    if not draft.content and not request.current_content:
+    sections_content = "\n\n".join(draft.sections.values()) if draft.sections else ""
+    if not draft.content and not sections_content and not request.current_content:
         raise HTTPException(status_code=400, detail="Draft has no content to refine")
     try:
         claude_service = get_claude_service_for_user(current_user)
-        content = request.current_content or draft.content or ""
+        content = request.current_content or draft.content or sections_content or ""
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
             suggestion = await loop.run_in_executor(

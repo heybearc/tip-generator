@@ -496,7 +496,7 @@ export default function DraftViewPage() {
 
     const contextContent = activeSectionKey && draft.sections
       ? draft.sections[activeSectionKey] || ''
-      : draft.content || ''
+      : draft.content || (draft.sections ? Object.values(draft.sections).join('\n\n') : '')
 
     const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: userMsg }]
     setChatMessages(newMessages)
@@ -508,8 +508,10 @@ export default function DraftViewPage() {
       })
       const assistantMsg: ChatMessage = { role: 'assistant', content: res.data.suggestion }
       setChatMessages([...newMessages, assistantMsg])
-    } catch {
-      setChatMessages([...newMessages, { role: 'assistant', content: 'Sorry, I could not process that. Please try again.' }])
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const errorMsg = detail || 'Sorry, I could not process that. Please try again.'
+      setChatMessages([...newMessages, { role: 'assistant', content: errorMsg }])
     } finally {
       setChatLoading(false)
     }
