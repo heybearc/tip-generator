@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const API_URL = '/api'
@@ -33,10 +33,6 @@ interface Gap {
   detail: string
 }
 
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 // Parse inline markdown tokens into React nodes
 function parseInline(text: string): React.ReactNode[] {
@@ -429,13 +425,6 @@ export default function DraftViewPage() {
   const [userSuggestions, setUserSuggestions] = useState<{ username: string; full_name: string | null }[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
 
-  // AI Chat
-  const [chatOpen, setChatOpen] = useState(false)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null)
-  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Gap report
   const [gapsOpen, setGapsOpen] = useState(false)
@@ -446,8 +435,6 @@ export default function DraftViewPage() {
   useEffect(() => {
     if (collabOpen && id) loadCollaborators()
   }, [collabOpen])
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
-
   const loadCollaborators = async () => {
     if (!id) return
     setCollabLoading(true)
@@ -623,34 +610,6 @@ export default function DraftViewPage() {
     }
   }
 
-  const handleChat = async () => {
-    if (!chatInput.trim() || !draft) return
-    const userMsg = chatInput.trim()
-    setChatInput('')
-    setChatLoading(true)
-
-    const contextContent = activeSectionKey && draft.sections
-      ? draft.sections[activeSectionKey] || ''
-      : draft.content || (draft.sections ? Object.values(draft.sections).join('\n\n') : '')
-
-    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: userMsg }]
-    setChatMessages(newMessages)
-
-    try {
-      const res = await axios.post(`${API_URL}/generate/drafts/${draft.id}/refine`, {
-        instruction: userMsg,
-        current_content: contextContent
-      })
-      const assistantMsg: ChatMessage = { role: 'assistant', content: res.data.suggestion }
-      setChatMessages([...newMessages, assistantMsg])
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      const errorMsg = detail || 'Sorry, I could not process that. Please try again.'
-      setChatMessages([...newMessages, { role: 'assistant', content: errorMsg }])
-    } finally {
-      setChatLoading(false)
-    }
-  }
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -741,15 +700,6 @@ export default function DraftViewPage() {
               {gaps !== null ? `Gaps (${gaps.length})` : 'Gaps'}
             </button>
           )}
-          <button
-            onClick={() => setChatOpen(!chatOpen)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              chatOpen ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            AI Assist
-          </button>
           <div className="flex rounded-lg overflow-hidden border border-green-600 disabled:opacity-50">
             <button
               onClick={handleExport}
@@ -871,9 +821,9 @@ export default function DraftViewPage() {
         </div>
       )}
 
-      <div className={`grid gap-4 ${chatOpen ? 'grid-cols-3' : 'grid-cols-1'}`}>
+      <div className="grid gap-4 grid-cols-1">
         {/* Sections */}
-        <div className={`${chatOpen ? 'col-span-2' : 'col-span-1'} max-h-[78vh] overflow-y-auto pr-1`}>
+        <div className="max-h-[78vh] overflow-y-auto pr-1">
           {sectionEntries.length > 0 && (
             <DocRefinePanel draftId={draft.id} onApplyAll={handleApplyAllSections} />
           )}
@@ -902,98 +852,6 @@ export default function DraftViewPage() {
           )}
         </div>
 
-        {/* AI Chat Panel */}
-        {chatOpen && (
-          <div className="col-span-1 bg-white rounded-xl border shadow-sm flex flex-col h-[78vh]">
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-purple-600" />
-                <span className="font-semibold text-sm">AI Assist</span>
-              </div>
-              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {activeSectionKey && (
-              <div className="px-3 py-2 bg-purple-50 border-b text-xs text-purple-700 flex items-center justify-between">
-                <span>Context: <strong>{activeSectionKey}</strong></span>
-                <button onClick={() => setActiveSectionKey(null)} className="text-purple-400 hover:text-purple-700"><X className="w-3 h-3" /></button>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {chatMessages.length === 0 && (
-                <div className="text-center py-6">
-                  <p className="text-sm text-gray-500 mb-2">Ask Claude about this TIP as a whole</p>
-                  <p className="text-xs text-amber-600 mb-4">To refine a specific section, expand it and click <strong>Refine</strong></p>
-                  <div className="space-y-2">
-                    {[
-                      'What sections are missing or incomplete?',
-                      'Does this plan have any logical gaps or risks not covered?',
-                      'Rewrite in a more formal tone',
-                      'Summarize what this TIP covers in 2-3 sentences',
-                    ].map(s => (
-                      <button key={s} onClick={() => setChatInput(s)}
-                        className="block w-full text-left text-xs px-3 py-2 bg-gray-50 hover:bg-purple-50 hover:text-purple-700 rounded-lg border border-gray-200 transition-colors"
-                      >{s}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                    {msg.role === 'assistant' && (
-                      <button
-                        onClick={() => {
-                          if (activeSectionKey) {
-                            handleSaveSection(activeSectionKey, msg.content)
-                          } else {
-                            navigator.clipboard.writeText(msg.content)
-                          }
-                        }}
-                        className="mt-2 text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
-                      >
-                        <CheckCircle className="w-3 h-3" />
-                        {activeSectionKey ? `Apply to "${activeSectionKey}"` : 'Copy suggestion'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-lg px-3 py-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            <div className="p-3 border-t">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChat()}
-                  placeholder="Ask Claude to improve this TIP..."
-                  className="flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-                <button
-                  onClick={handleChat}
-                  disabled={chatLoading || !chatInput.trim()}
-                  className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
