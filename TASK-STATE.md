@@ -1,24 +1,30 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (v0.6.0 released — Phase 2.3 complete)
+**Last updated:** 2026-04-22 (mid-day — template v2 + prompt caching deployed to LIVE)
 **Current branch:** main
-**Working on:** Phase 2.4 (TBD)
+**Working on:** Post-template testing / Phase 2.4 TBD
 
 ---
 
 ## Current Task
-**Idle — awaiting next phase direction**
+**Test new Pillar-based template with a real generation run**
 
 ### Confirmed Complete
 - ✅ **Phase 2.1** — Admin dashboard
 - ✅ **Phase 2.2** — TIP Library (few-shot injection, RAG-ready schema)
 - ✅ **Phase 2.3** — Draft Collaboration (collaborators table, invite/remove, typeahead search, shared badge)
 - ✅ **v0.6.0** — LIVE=GREEN (CT191, 10.92.3.92) | STANDBY=BLUE (CT190, 10.92.3.91)
+- ✅ **AI Assist removal** — legacy chat panel removed; per-section Refine + custom mode + DocRefinePanel remain
+- ✅ **Pillar template v2** — `tip_template_v2.docx` active (DB ID=3), 18 sections parsed, build script at `docs/build_tip_template.py`
+- ✅ **Prompt caching** — `SYSTEM_PREAMBLE` cached (ephemeral) on all Claude calls
+- ✅ **Pillar-aware generation prompt** — SYSTEM_PREAMBLE updated with Pillar structure, Site Mapping, Open Items, Approximate Timing rules
+- ✅ **Export fix** — export endpoint now loads base .docx from active DB template path
 
 ### Next steps
-1. **Phase 2.4** — TBD
-2. **Few-shot injection quality** — backlog: category matching, semantic similarity (see PLAN.md)
-3. **Excel parser tuning** — validate against real discovery workbooks (backlog)
+1. **Generate a test TIP** with the new v2 template to validate Pillar output quality
+2. **Phase 2.4** — TBD (Context Injection candidate — upload doc to enrich existing draft)
+3. **Few-shot injection quality** — backlog: category matching, semantic similarity
+4. **Excel parser tuning** — validate against real discovery workbooks (backlog)
 
 ---
 

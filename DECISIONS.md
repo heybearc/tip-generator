@@ -134,6 +134,23 @@ When adding a decision, use this format:
 - **Roles:** `admin` (full access to all drafts, library management, user management), `user` (own drafts + invited drafts editable, all others read-only)
 - **Implementation:** `draft_collaborators` join table for invite-to-edit; document table has no `owner_id` filter on read queries
 
+## D-LOCAL-016: Pillar-based TIP template v2
+- **Decision:** Replace SIP-format template (Technology Areas 1-6) with Pillar-based Project TIP format. Template v2 has: preamble sections, 6 placeholder Pillars (each with navy banner, Preconditions amber callout, Phase steps, Acceptance Checklist), Site Mapping, Open Items, Appendix A server inventory.
+- **Why:** Team moving to Pillar-format for all project TIPs. DialConnection doc used as reference structure.
+- **When:** 2026-04-22
+- **Active path:** `/mnt/tip-uploads/templates/tip_template_v2.docx` (DB ID=3, is_active=true). Build script: `docs/build_tip_template.py`.
+
+## D-LOCAL-017: Prompt caching on all Claude calls
+- **Decision:** All Claude API calls use `cache_control: {"type": "ephemeral"}` on the system preamble block (`SYSTEM_PREAMBLE`). Applies to generation (single-pass + chunked), refine-guided, refine-all.
+- **Why:** Anthropic caches ephemeral system blocks for 5 min, ~90% reduction on input token cost for repeated calls within the window.
+- **When:** 2026-04-22
+
+## D-LOCAL-018: Anthropic Batch API rejected for user-facing endpoints
+- **Decision:** Do not use `messages.batches.create()` for any user-facing real-time endpoint. Batch API has up to 24h processing time — incompatible with interactive use.
+- **Why:** Batch API is for overnight/background processing only. All TIP Generator endpoints (`refine-all`, `refine-guided`, generation) are user-facing and expect seconds-level responses.
+- **When:** 2026-04-22
+- **Alternative:** Parallel `ThreadPoolExecutor` calls with prompt caching achieves cost efficiency without latency penalty.
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.
