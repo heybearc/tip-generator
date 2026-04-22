@@ -811,6 +811,8 @@ export default function DraftViewPage() {
                         onClick={() => {
                           if (activeSectionKey) {
                             handleSaveSection(activeSectionKey, msg.content)
+                          } else {
+                            navigator.clipboard.writeText(msg.content)
                           }
                         }}
                         className="mt-2 text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
