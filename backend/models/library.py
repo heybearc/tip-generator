@@ -1,7 +1,7 @@
 """
 Library document model — admin-managed reference TIPs, globally visible
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -19,7 +19,8 @@ class LibraryDocument(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    category = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False, default="", index=True)
+    category_suggested = Column(Boolean, nullable=False, default=False)
     description = Column(Text, nullable=True)
     filename = Column(String, nullable=False)
     original_filename = Column(String, nullable=False)

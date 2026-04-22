@@ -42,6 +42,7 @@ class LibraryDocumentResponse(BaseModel):
     id: int
     title: str
     category: str
+    category_suggested: bool
     description: Optional[str]
     original_filename: str
     file_size: Optional[int]
@@ -62,6 +63,10 @@ class LibraryApprovalResponse(BaseModel):
     approved_at: Optional[datetime]
 
 
+class LibraryCategoryUpdate(BaseModel):
+    category: str
+
+
 # --- Helpers ---
 
 def _build_response(doc: LibraryDocument, db: Session) -> LibraryDocumentResponse:
@@ -70,7 +75,8 @@ def _build_response(doc: LibraryDocument, db: Session) -> LibraryDocumentRespons
     return LibraryDocumentResponse(
         id=doc.id,
         title=doc.title,
-        category=doc.category,
+        category=doc.category or "",
+        category_suggested=bool(doc.category_suggested),
         description=doc.description,
         original_filename=doc.original_filename,
         file_size=doc.file_size,
@@ -81,6 +87,41 @@ def _build_response(doc: LibraryDocument, db: Session) -> LibraryDocumentRespons
         approved_at=doc.approved_at,
         created_at=doc.created_at,
     )
+
+
+def _suggest_category(
+    title: str,
+    filename: str,
+    extracted_text: Optional[str],
+    api_key: Optional[str],
+    model: str,
+) -> Optional[str]:
+    """Call Claude to suggest a category based on document title, filename, and a text preview."""
+    if not api_key:
+        return None
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=api_key)
+        preview = (extracted_text or "")[:3000]
+        prompt = (
+            "You are categorizing a Technical Implementation Plan (TIP) document for a Managed Service Provider library.\n"
+            f"Document title: {title}\n"
+            f"Filename: {filename}\n"
+            f"Content preview:\n{preview}\n\n"
+            "Reply with ONLY a short category label (2-5 words) that best describes this TIP type. "
+            "Examples: 'M365 Migration', 'Azure Infrastructure', 'Network Deployment', "
+            "'Server Consolidation', 'Security Hardening', 'VoIP Implementation'. "
+            "No explanation, no punctuation — just the category label."
+        )
+        response = client.messages.create(
+            model=model,
+            max_tokens=20,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip().strip('"').strip("'")
+    except Exception as e:
+        print(f"[library] category suggestion failed: {e}")
+        return None
 
 
 def _extract_text(file_path: str, mime_type: str) -> Optional[str]:
@@ -150,12 +191,12 @@ def list_all(
 async def upload_library_doc(
     file: UploadFile = File(...),
     title: str = Form(...),
-    category: str = Form(...),
+    category: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    """Upload a new library reference TIP — admin only. Status starts as pending."""
+    """Upload a new library reference TIP — admin only. Category is optional; Claude will suggest one if omitted."""
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Allowed types: {', '.join(ALLOWED_EXTENSIONS)}")
@@ -178,9 +219,26 @@ async def upload_library_doc(
     mime_type = mime_map.get(ext, "application/octet-stream")
     extracted = _extract_text(file_path, mime_type)
 
+    # Resolve category — use provided value or ask Claude
+    category_str = (category or "").strip()
+    category_suggested = False
+    if not category_str:
+        claude_model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+        suggested = _suggest_category(
+            title=title.strip(),
+            filename=file.filename,
+            extracted_text=extracted,
+            api_key=admin.claude_api_key,
+            model=claude_model,
+        )
+        if suggested:
+            category_str = suggested
+            category_suggested = True
+
     doc = LibraryDocument(
         title=title.strip(),
-        category=category.strip(),
+        category=category_str,
+        category_suggested=category_suggested,
         description=description.strip() if description else None,
         filename=safe_name,
         original_filename=file.filename,
@@ -194,6 +252,23 @@ async def upload_library_doc(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    return _build_response(doc, db)
+
+
+@router.patch("/{doc_id}/category")
+def update_category(
+    doc_id: int,
+    body: LibraryCategoryUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Update the category of a library document — clears the suggested flag."""
+    doc = db.query(LibraryDocument).filter(LibraryDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Library document not found")
+    doc.category = body.category.strip()
+    doc.category_suggested = False
+    db.commit()
     return _build_response(doc, db)
 
 

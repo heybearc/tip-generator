@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import React from 'react'
-import { Library, Search, Tag, FileText, CheckCircle, Clock, XCircle, Upload, Trash2 } from 'lucide-react'
+import { Library, Search, Tag, FileText, CheckCircle, Clock, XCircle, Upload, Trash2, Sparkles, Pencil, Check, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface LibraryDoc {
   id: number
   title: string
   category: string
+  category_suggested: boolean
   description: string | null
   original_filename: string
   file_size: number | null
@@ -50,6 +51,10 @@ export default function LibraryPage() {
   const [uploadCategory, setUploadCategory] = useState('')
   const [uploadDescription, setUploadDescription] = useState('')
   const [uploadError, setUploadError] = useState<string | null>(null)
+
+  // Inline category edit state: docId -> draft value
+  const [editingCategory, setEditingCategory] = useState<Record<number, string>>({})
+  const [savingCategory, setSavingCategory] = useState<number | null>(null)
 
   const fetchDocs = async () => {
     setLoading(true)
@@ -96,10 +101,29 @@ export default function LibraryPage() {
     fetchCategories()
   }
 
+  const handleSaveCategory = async (id: number) => {
+    const val = (editingCategory[id] || '').trim()
+    if (!val) return
+    setSavingCategory(id)
+    try {
+      await fetch(`/api/library/${id}/category`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: val }),
+      })
+      setEditingCategory(prev => { const n = { ...prev }; delete n[id]; return n })
+      fetchDocs()
+      fetchCategories()
+    } finally {
+      setSavingCategory(null)
+    }
+  }
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!uploadFile || !uploadTitle.trim() || !uploadCategory.trim()) {
-      setUploadError('Title, category, and file are required.')
+    if (!uploadFile || !uploadTitle.trim()) {
+      setUploadError('Title and file are required.')
       return
     }
     setUploadError(null)
@@ -189,15 +213,19 @@ export default function LibraryPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+                <span className="ml-1 text-xs text-purple-500 font-normal flex-inline items-center gap-0.5">
+                  <Sparkles className="w-3 h-3 inline-block" /> AI will suggest if left blank
+                </span>
+              </label>
               <input
                 type="text"
                 value={uploadCategory}
                 onChange={e => setUploadCategory(e.target.value)}
-                placeholder="e.g. M365 Migration"
+                placeholder="Leave blank to auto-suggest"
                 list="category-suggestions"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
               />
               <datalist id="category-suggestions">
                 {categories.map(c => <option key={c} value={c} />)}
@@ -225,6 +253,12 @@ export default function LibraryPage() {
             />
           </div>
           {uploadError && <p className="text-red-600 text-sm mb-3">{uploadError}</p>}
+          {uploading && (
+            <p className="text-purple-600 text-xs mb-3 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+              Extracting text and suggesting category…
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               type="submit"
@@ -308,9 +342,55 @@ export default function LibraryPage() {
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${st.cls}`}>
                             {st.icon}{st.label}
                           </span>
+                          {doc.category_suggested && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border text-purple-700 bg-purple-50 border-purple-200">
+                              <Sparkles className="w-3 h-3" />AI suggested
+                            </span>
+                          )}
                         </div>
-                        {doc.description && (
-                          <p className="text-xs text-gray-500 mb-1 truncate">{doc.description}</p>
+                        {/* Inline category edit for admin */}
+                        {isAdmin && doc.status === 'pending' ? (
+                          <div className="flex items-center gap-1 mb-1">
+                            {editingCategory[doc.id] !== undefined ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={editingCategory[doc.id]}
+                                  onChange={e => setEditingCategory(prev => ({ ...prev, [doc.id]: e.target.value }))}
+                                  list="category-suggestions"
+                                  className="border border-purple-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 w-40"
+                                />
+                                <button
+                                  onClick={() => handleSaveCategory(doc.id)}
+                                  disabled={savingCategory === doc.id}
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingCategory(prev => { const n = { ...prev }; delete n[doc.id]; return n })}
+                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setEditingCategory(prev => ({ ...prev, [doc.id]: doc.category }))}
+                                className="flex items-center gap-1 text-xs text-gray-500 hover:text-purple-600 transition-colors"
+                              >
+                                <Tag className="w-3 h-3" />
+                                <span className={doc.category_suggested ? 'text-purple-600 font-medium' : ''}>
+                                  {doc.category || <span className="italic text-gray-400">no category</span>}
+                                </span>
+                                <Pencil className="w-3 h-3 opacity-50" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          doc.description && (
+                            <p className="text-xs text-gray-500 mb-1 truncate">{doc.description}</p>
+                          )
                         )}
                         <p className="text-xs text-gray-400">
                           {doc.original_filename} · {formatBytes(doc.file_size)} · uploaded by {doc.uploaded_by_username}
