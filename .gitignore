@@ -91,3 +91,7 @@ Thumbs.db
 .windsurf/
 *-remote.code-workspace
 CREDENTIALS.md
+
+# Private / client data in docs/
+docs/*.docx
+docs/build_*.py
