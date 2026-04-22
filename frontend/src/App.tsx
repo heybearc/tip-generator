@@ -23,6 +23,7 @@ import DocumentsPage from './pages/DocumentsPage'
 import GeneratePage from './pages/GeneratePage'
 import HelpPage from './pages/HelpPage'
 import ReleaseNotesPage from './pages/ReleaseNotesPage'
+import ProfilePage from './pages/ProfilePage'
 import GettingStartedPage from './pages/help/GettingStartedPage'
 import UploadDocumentsPage from './pages/help/UploadDocumentsPage'
 import GenerateTipPage from './pages/help/GenerateTipPage'
@@ -52,6 +53,7 @@ function App() {
         <Route path="/help/manage-drafts" element={<ManageDraftsPage />} />
         <Route path="/help/template-management" element={<TemplateManagementHelpPage />} />
         <Route path="/release-notes" element={<ReleaseNotesPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
             </Routes>
           </Layout>
         </ProtectedRoute>

@@ -19,13 +19,13 @@ SECTION_CHUNK_SIZE = 5            # Sections per chunk in chunked mode
 class ClaudeService:
     """Service for interacting with Claude API"""
 
-    def __init__(self):
-        self.api_key = os.getenv("ANTHROPIC_API_KEY")
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key
         self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
         self.max_tokens = int(os.getenv("CLAUDE_MAX_TOKENS", "8000"))
 
         if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+            raise ValueError("No Claude API key configured. Add your Anthropic API key in your profile settings.")
 
         self.client = Anthropic(api_key=self.api_key)
 

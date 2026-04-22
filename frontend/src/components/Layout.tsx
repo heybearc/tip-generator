@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen, LogOut, User } from 'lucide-react'
+import { FileText, Upload, FolderOpen, Settings, Files, Wand2, HelpCircle, BookOpen, LogOut, User, KeyRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface LayoutProps {
@@ -116,7 +116,20 @@ export default function Layout({ children }: LayoutProps) {
             {/* User menu */}
             <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
               <User className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-700 max-w-[120px] truncate">{user?.full_name || user?.email}</span>
+              <Link
+                to="/profile"
+                title="Profile settings"
+                className="text-sm text-gray-700 max-w-[120px] truncate hover:text-blue-600"
+              >
+                {user?.full_name || user?.email}
+              </Link>
+              <Link
+                to="/profile"
+                title="API Key settings"
+                className={`p-1.5 rounded transition-colors ${isActive('/profile') ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
+              >
+                <KeyRound className="w-4 h-4" />
+              </Link>
               <button
                 onClick={logout}
                 title="Sign out"

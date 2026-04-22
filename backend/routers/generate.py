@@ -19,9 +19,11 @@ from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
-def get_claude_service():
-    """Get Claude service instance"""
-    return ClaudeService()
+def get_claude_service_for_user(user: UserModel) -> ClaudeService:
+    if not user.claude_api_key:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=402, detail="No Claude API key configured. Add your Anthropic API key in your profile settings.")
+    return ClaudeService(api_key=user.claude_api_key)
 
 @router.post("/draft", response_model=DraftResponse)
 async def create_draft(
@@ -151,7 +153,7 @@ async def refine_draft(
     if not draft.content and not request.current_content:
         raise HTTPException(status_code=400, detail="Draft has no content to refine")
     try:
-        claude_service = get_claude_service()
+        claude_service = get_claude_service_for_user(current_user)
         content = request.current_content or draft.content or ""
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
@@ -356,7 +358,6 @@ async def refine_section_guided(
     draft_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    claude_service: ClaudeService = Depends(get_claude_service),
     current_user: UserModel = Depends(get_current_user),
 ):
     """Refine a single section using the template instruction for that section type."""
@@ -499,13 +500,16 @@ Current content:
 
 Rewrite this section following the rules above."""
 
+    if not current_user.claude_api_key:
+        raise HTTPException(status_code=402, detail="No Claude API key configured. Add your Anthropic API key in your profile settings.")
+
     try:
         import anthropic
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
         def _call_claude():
-            client = anthropic.Anthropic()
+            client = anthropic.Anthropic(api_key=current_user.claude_api_key)
             message = client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=1500,

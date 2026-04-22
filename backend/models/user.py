@@ -17,6 +17,7 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)
     oauth_provider = Column(String, nullable=True)  # 'authentik', 'google', etc.
     oauth_id = Column(String, nullable=True)
+    claude_api_key = Column(String, nullable=True)  # User's personal Anthropic API key
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

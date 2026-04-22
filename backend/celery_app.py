@@ -75,6 +75,14 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
         if not draft:
             return {"error": f"Draft {draft_id} not found"}
 
+        from models.user import User as UserModel
+        user = db.query(UserModel).filter(UserModel.id == draft.user_id).first()
+        if not user or not user.claude_api_key:
+            draft.status = DraftStatus.FAILED
+            draft.content = "Generation failed: No Claude API key configured. Add your Anthropic API key in your profile settings."
+            db.commit()
+            return {"error": "No Claude API key configured"}
+
         discovery_doc = None
         service_order_doc = None
         if draft.discovery_document_id:
@@ -96,7 +104,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             except Exception:
                 pass
 
-        claude = ClaudeService()
+        claude = ClaudeService(api_key=user.claude_api_key)
         updated_draft = asyncio.run(
             claude.generate_tip(
                 draft=draft,

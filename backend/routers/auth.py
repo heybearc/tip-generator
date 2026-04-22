@@ -212,6 +212,41 @@ async def me(current_user: User = Depends(get_current_user)):
     }
 
 
+@router.get("/profile")
+async def get_profile(current_user: User = Depends(get_current_user)):
+    """Return current user's profile including whether a Claude API key is set."""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "has_claude_api_key": bool(current_user.claude_api_key),
+    }
+
+
+@router.patch("/profile")
+async def update_profile(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update user profile. Accepts: claude_api_key (set or clear), full_name."""
+    if "claude_api_key" in body:
+        key = body["claude_api_key"]
+        current_user.claude_api_key = key.strip() if key else None
+    if "full_name" in body:
+        current_user.full_name = body["full_name"]
+    db.commit()
+    db.refresh(current_user)
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "has_claude_api_key": bool(current_user.claude_api_key),
+    }
+
+
 @router.post("/logout")
 async def logout():
     """Clear session cookie."""
