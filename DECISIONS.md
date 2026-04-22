@@ -81,3 +81,23 @@ When adding a decision, use this format:
 - **Why:** Containers occasionally have host key changes after Proxmox maintenance. Without this, every SSH command breaks requiring manual `ssh-keygen -R`. `CheckHostIP no` prevents ECDSA/ED25519 confusion when the same IP changes keys.
 - **When:** 2026-04-20
 - **Aliases:** `tip-blue`, `ct190-tip`, `10.92.3.91` → CT190 / `tip-green`, `ct191-tip`, `10.92.3.92` → CT191
+
+## D-LOCAL-007: Authentik scope encoding via `quote_plus` (not `urlencode` default)
+- **Decision:** Encode OAuth `scope` parameter using `urlencode` (which uses `quote_plus` — spaces → `+`), but leave `redirect_uri` unencoded in the query string to avoid double-encoding in Authentik's `next=` redirect parameter.
+- **Why:** Authentik internally wraps the authorization URL in a `next=` redirect. If `redirect_uri` is percent-encoded, Authentik double-encodes it, producing a malformed callback URL. Standard `urlencode` for other params is fine.
+- **When:** 2026-04-21
+- **Location:** `backend/routers/auth.py` — `login` endpoint, lines ~97-102
+
+## D-LOCAL-008: Playwright global-setup drives Authentik flow executor API directly
+- **Decision:** Use Authentik's internal flow executor REST API (`/api/v3/flows/executor/default-authentication-flow/`) for programmatic login in Playwright `globalSetup`, bypassing the Vue SPA UI.
+- **Why:** Authentik's frontend is a Vue SPA. In headless Playwright, the `Continue`/`Submit` button click handlers were not attaching correctly (Vue reactivity issue), causing the login flow to stall. Driving the underlying API directly is reliable and fast.
+- **When:** 2026-04-21
+- **Location:** `tests/global-setup.ts`
+- **Flow:** POST uid_field → POST password → GET `/api/auth/login` (re-triggers our OAuth flow) → `waitForURL` on app domain → save `storageState`
+
+## D-LOCAL-009: JWT HttpOnly cookie for session management
+- **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
+- **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.
+- **When:** 2026-04-21
+- **Expiry:** 60 minutes (`JWT_EXPIRATION_MINUTES=60`)
+- **Logout:** Cookie cleared via `response.delete_cookie("tip_session")` on `/api/auth/logout`

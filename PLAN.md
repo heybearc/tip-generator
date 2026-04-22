@@ -90,19 +90,24 @@
 - ✅ Auto-navigates to draft on completion
 - ✅ Released in v0.2.0 — 2026-04-21
 
-### Phase 1.8: Authentication
+### Phase 1.8: Authentication ✅
 **Objective:** Authentik OAuth2/OIDC, protected routes, user sessions
 
-**Notes:**
-- ⚠️ Revision History author name currently hardcoded to `"TIP Generator Admin"` — will resolve automatically once real user records exist in DB post-auth
+- ✅ Authentik OIDC Authorization Code flow (FastAPI backend)
+- ✅ JWT HttpOnly session cookie (60 min expiry)
+- ✅ All routes protected via `ProtectedRoute` + `get_current_user` dependency
+- ✅ User name + logout button in nav header
+- ✅ `TEMP_USER_ID` fully removed — all endpoints scoped to authenticated user
+- ✅ Released in v0.3.0 — 2026-04-21
+- ⚠️ Revision History author name currently hardcoded to `"TIP Generator Admin"` — verify this resolves now that real users exist
 
 ---
 
 ## Prioritized Backlog
 
 ### High Priority
-- **Authentication** (Phase 1.8) — Authentik OAuth2/OIDC, protected routes, user sessions
-- **PDF export** — convert docx to PDF (LibreOffice headless or WeasyPrint)
+- **Add production Authentik redirect URI** — `https://tip.cloudigan.net/api/auth/callback` must be registered in Authentik provider (5 min task)
+- **PDF export** — convert docx to PDF (LibreOffice headless already on containers)
 - **Excel parser tuning** — validate against real discovery workbooks, handle edge cases (merged cells, dropdowns, nested tables)
 
 ### Medium Priority
@@ -120,7 +125,7 @@
 - **Template library** — multiple named templates, select per generation
 - **Analytics** — token usage tracking, generation time, cost estimation
 - **API tests** — pytest suite for all endpoints
-- **E2E tests** — ✅ Playwright suite live on qa-01 (`/opt/tests/tip-generator/`) — 26/26 passing
+- **E2E tests** — ✅ Playwright suite live on qa-01 (`/opt/tests/tip-generator/`) — 26/28 passing (2 skipped)
 
 ---
 
