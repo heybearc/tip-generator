@@ -68,22 +68,20 @@ export default function GeneratePage() {
   }
 
   const toggleDoc = (id: number) => {
-    setSelectedDocIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-        setDocRoles(r => { const copy = { ...r }; delete copy[id]; return copy })
-      } else {
-        next.add(id)
-        // Auto-assign role based on doc type
-        const doc = documents.find(d => d.id === id)
-        const defaultRole = doc?.document_type === 'discovery_excel' ? 'discovery'
-          : doc?.document_type === 'service_order_pdf' ? 'service_order'
-          : 'supplemental'
-        setDocRoles(r => ({ ...r, [id]: defaultRole }))
-      }
-      return next
-    })
+    const isSelected = selectedDocIds.has(id)
+    const next = new Set(selectedDocIds)
+    if (isSelected) {
+      next.delete(id)
+      setDocRoles(r => { const copy = { ...r }; delete copy[id]; return copy })
+    } else {
+      next.add(id)
+      const doc = documents.find(d => d.id === id)
+      const defaultRole = doc?.document_type === 'discovery_excel' ? 'discovery'
+        : doc?.document_type === 'service_order_pdf' ? 'service_order'
+        : 'supplemental'
+      setDocRoles(r => ({ ...r, [id]: defaultRole }))
+    }
+    setSelectedDocIds(next)
   }
 
   const setRole = (id: number, role: string) => {
