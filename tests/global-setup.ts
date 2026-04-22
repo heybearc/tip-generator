@@ -42,9 +42,15 @@ async function globalSetup(config: FullConfig) {
   }, { apiBase, flowQuery, password })
 
   // Now that the user is authenticated, re-trigger our login endpoint —
-  // Authentik will issue the code immediately and redirect to our callback
+  // Authentik will issue the code immediately and redirect to our callback.
+  // NOTE: Authentik redirect_uri is registered for tip.cloudigan.net (LIVE) only.
+  // Tests must run against LIVE (blue-tip.cloudigan.net) for auth to complete.
   await page.goto(`${baseURL}/api/auth/login`)
-  await page.waitForURL(/blue-tip\.cloudigan\.net\/(?!api\/auth)/, { timeout: 20000 })
+  // Wait until we land on the app (not Authentik, not the auth callback)
+  await page.waitForURL(
+    url => !url.href.includes('auth.cloudigan.net') && !url.href.includes('/api/auth'),
+    { timeout: 20000 }
+  )
 
   await ctx.storageState({ path: 'auth-state.json' })
   await browser.close()
