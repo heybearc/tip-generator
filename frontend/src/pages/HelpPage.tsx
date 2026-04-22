@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Upload, Wand2, FolderOpen, Settings, FileText, HelpCircle, Rocket, BookOpen } from 'lucide-react'
+import { Upload, Wand2, FolderOpen, Settings, FileText, HelpCircle, Rocket, BookOpen, KeyRound } from 'lucide-react'
 
 const topics = [
   {
@@ -36,6 +36,14 @@ const topics = [
     title: 'Template Management',
     description: 'Uploading and activating a Word template that defines the structure of your TIPs.',
     color: 'text-gray-600 bg-gray-100',
+  },
+  {
+    id: 'profile-settings',
+    icon: KeyRound,
+    title: 'Profile & API Key',
+    description: 'Set up your Anthropic Claude API key and choose your preferred model for generation.',
+    color: 'text-yellow-600 bg-yellow-50',
+    external: '/profile',
   },
   {
     id: 'release-notes',
