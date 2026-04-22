@@ -17,7 +17,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="TIP Generator API",
     description="AI-powered Technical Implementation Plan generator using Claude API",
-    version="0.5.0",
+    version="0.5.1",
     redirect_slashes=False,
 )
 
@@ -71,7 +71,7 @@ async def root():
     """Root endpoint"""
     return {
         "message": "TIP Generator API",
-        "version": "0.5.0",
+        "version": "0.5.1",
         "status": "running"
     }
 
