@@ -95,6 +95,14 @@ When adding a decision, use this format:
 - **Location:** `tests/global-setup.ts`
 - **Flow:** POST uid_field → POST password → GET `/api/auth/login` (re-triggers our OAuth flow) → `waitForURL` on app domain → save `storageState`
 
+## D-LOCAL-010: VIOLATION — Skipped release workflow on Phase 1.9 deploy (2026-04-22)
+- **Violation:** Cascade deployed Phase 1.9 changes directly to both BLUE (LIVE) and GREEN (STANDBY) containers without following the `/bump` → `/test-release` → `/release` → `/sync` workflow.
+- **Rules broken:** `global-rules.md` §1 (Release Workflow), §12 (Rule Violations — must challenge before acting), §13 (Assistant must challenge rule-violating actions)
+- **What happened:** After committing and pushing, Cascade ran `ssh ct191-tip` (GREEN/standby — correct first step) then immediately also deployed to `ct190-tip` (BLUE/LIVE — should require test gate first). No `/test-release` was run. No explicit approval for LIVE deploy was obtained.
+- **Correct procedure:** Deploy to STANDBY only → tell user → wait for `/test-release` to pass → user runs `/release` to switch traffic → `/sync` to update the old LIVE.
+- **Correction:** Both containers are currently on the same code so no rollback is needed. Future deployments must stop at STANDBY and wait for explicit release approval.
+- **When:** 2026-04-22
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.
