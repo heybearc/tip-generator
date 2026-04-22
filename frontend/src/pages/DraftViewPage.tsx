@@ -305,6 +305,8 @@ export default function DraftViewPage() {
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviting, setInviting] = useState(false)
   const [collabError, setCollabError] = useState<string | null>(null)
+  const [userSuggestions, setUserSuggestions] = useState<{ username: string; full_name: string | null }[]>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false)
@@ -338,10 +340,24 @@ export default function DraftViewPage() {
     }
   }
 
+  const searchUsers = async (q: string) => {
+    if (q.length < 2) { setUserSuggestions([]); setSuggestionsOpen(false); return }
+    try {
+      const res = await axios.get(`${API_URL}/auth/users/search`, { params: { q } })
+      const existing = new Set(collaborators.map(c => c.username))
+      setUserSuggestions(res.data.filter((u: { username: string }) => !existing.has(u.username)))
+      setSuggestionsOpen(true)
+    } catch {
+      setUserSuggestions([])
+    }
+  }
+
   const handleInvite = async () => {
     if (!inviteUsername.trim() || !id) return
     setInviting(true)
     setCollabError(null)
+    setSuggestionsOpen(false)
+    setUserSuggestions([])
     try {
       const res = await axios.post(`${API_URL}/generate/drafts/${id}/collaborators`, { username: inviteUsername.trim() })
       setCollaborators(prev => [...prev, res.data])
@@ -351,6 +367,12 @@ export default function DraftViewPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  const selectSuggestion = (username: string) => {
+    setInviteUsername(username)
+    setUserSuggestions([])
+    setSuggestionsOpen(false)
   }
 
   const handleRemoveCollab = async (userId: number) => {
@@ -647,23 +669,41 @@ export default function DraftViewPage() {
             </div>
           )}
           {currentUser && (draft.user_id === currentUser.id || currentUser.is_superuser) && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={inviteUsername}
-                onChange={e => { setInviteUsername(e.target.value); setCollabError(null) }}
-                onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                placeholder="Username to invite…"
-                className="flex-1 text-sm border border-blue-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-              />
-              <button
-                onClick={handleInvite}
-                disabled={inviting || !inviteUsername.trim()}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                Invite
-              </button>
+            <div className="relative">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inviteUsername}
+                  onChange={e => { setInviteUsername(e.target.value); setCollabError(null); searchUsers(e.target.value) }}
+                  onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                  onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+                  onFocus={() => inviteUsername.length >= 2 && userSuggestions.length > 0 && setSuggestionsOpen(true)}
+                  placeholder="Search by name or username…"
+                  className="flex-1 text-sm border border-blue-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                />
+                <button
+                  onClick={handleInvite}
+                  disabled={inviting || !inviteUsername.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                  Invite
+                </button>
+              </div>
+              {suggestionsOpen && userSuggestions.length > 0 && (
+                <div className="absolute z-10 left-0 right-12 mt-1 bg-white border border-blue-200 rounded-lg shadow-lg overflow-hidden">
+                  {userSuggestions.map(u => (
+                    <button
+                      key={u.username}
+                      onMouseDown={() => selectSuggestion(u.username)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                    >
+                      <span className="font-medium text-gray-800">{u.username}</span>
+                      {u.full_name && <span className="text-gray-400 text-xs">{u.full_name}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {collabError && <p className="text-xs text-red-600 mt-2">{collabError}</p>}

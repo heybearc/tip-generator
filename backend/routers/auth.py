@@ -293,6 +293,28 @@ async def update_profile(
     }
 
 
+@router.get("/users/search")
+async def search_users(
+    q: str = "",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Search active users by username or full_name prefix. Returns up to 10 matches. Excludes self."""
+    if len(q) < 2:
+        return []
+    results = (
+        db.query(User)
+        .filter(
+            User.is_active == True,
+            User.id != current_user.id,
+            (User.username.ilike(f"%{q}%") | User.full_name.ilike(f"%{q}%")),
+        )
+        .limit(10)
+        .all()
+    )
+    return [{"username": u.username, "full_name": u.full_name} for u in results]
+
+
 @router.post("/logout")
 async def logout():
     """Clear session cookie."""
