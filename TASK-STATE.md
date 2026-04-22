@@ -25,7 +25,7 @@
 
 ## Known Issues
 - ℹ️ **2 Playwright tests skipped** — data-dependent (require existing drafts); acceptable for now.
-- ℹ️ **Tests run against LIVE only** — Authentik redirect_uri only registered for `tip.cloudigan.net`; green-tip cannot complete OAuth. See D-LOCAL-011.
+- ℹ️ **Tests run against LIVE only** — all three redirect URIs registered in Authentik; tests target LIVE for stability. See D-LOCAL-011.
 
 ---
 
