@@ -190,9 +190,13 @@ async def list_documents(
     """
     from models.document import Document
     
+    from sqlalchemy import or_
+    filters = [Document.user_id == current_user.id]
+    if current_user.id != 1:
+        filters.append(Document.user_id == 1)
     documents = db.query(Document)\
-        .filter(Document.user_id == current_user.id)\
-        .order_by(Document.created_at.desc())\
+        .filter(or_(*filters))\
+        .order_by(Document.user_id.asc(), Document.created_at.desc())\
         .offset(skip)\
         .limit(limit)\
         .all()
@@ -210,8 +214,12 @@ async def get_document(
     """
     from models.document import Document
     
+    from sqlalchemy import or_
     document = db.query(Document)\
-        .filter(Document.id == document_id, Document.user_id == current_user.id)\
+        .filter(
+            Document.id == document_id,
+            or_(Document.user_id == current_user.id, Document.user_id == 1)
+        )\
         .first()
     
     if not document:

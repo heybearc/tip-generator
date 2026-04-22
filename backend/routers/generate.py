@@ -34,21 +34,20 @@ async def create_draft(
     """
     Create a new TIP draft
     """
-    # Validate documents exist if provided
+    # Validate documents exist if provided — allow user's own docs and shared docs from user ID 1
+    from sqlalchemy import or_ as sql_or
+    def _can_access_doc(doc_id: int) -> bool:
+        return db.query(Document).filter(
+            Document.id == doc_id,
+            sql_or(Document.user_id == current_user.id, Document.user_id == 1)
+        ).first() is not None
+
     if draft_data.discovery_document_id:
-        doc = db.query(Document).filter(
-            Document.id == draft_data.discovery_document_id,
-            Document.user_id == current_user.id
-        ).first()
-        if not doc:
+        if not _can_access_doc(draft_data.discovery_document_id):
             raise HTTPException(status_code=404, detail="Discovery document not found")
     
     if draft_data.service_order_document_id:
-        doc = db.query(Document).filter(
-            Document.id == draft_data.service_order_document_id,
-            Document.user_id == current_user.id
-        ).first()
-        if not doc:
+        if not _can_access_doc(draft_data.service_order_document_id):
             raise HTTPException(status_code=404, detail="Service order document not found")
     
     # Create draft

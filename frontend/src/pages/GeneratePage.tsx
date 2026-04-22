@@ -7,6 +7,7 @@ const API_URL = '/api'
 
 interface Document {
   id: number
+  user_id: number
   original_filename: string
   document_type: string
   status: string
@@ -213,7 +214,7 @@ export default function GeneratePage() {
               <option value="">— None —</option>
               {discoveryDocs.map(d => (
                 <option key={d.id} value={d.id}>
-                  {d.original_filename} ({formatSize(d.file_size)})
+                  {d.user_id === 1 ? '⬡ ' : ''}{d.original_filename} ({formatSize(d.file_size)})
                 </option>
               ))}
             </select>
@@ -229,7 +230,7 @@ export default function GeneratePage() {
               <option value="">— None —</option>
               {serviceOrderDocs.map(d => (
                 <option key={d.id} value={d.id}>
-                  {d.original_filename} ({formatSize(d.file_size)})
+                  {d.user_id === 1 ? '⬡ ' : ''}{d.original_filename} ({formatSize(d.file_size)})
                 </option>
               ))}
             </select>

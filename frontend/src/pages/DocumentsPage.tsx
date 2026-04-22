@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface Document {
   id: number
+  user_id: number
   filename: string
   original_filename: string
   file_size: number
@@ -14,6 +15,8 @@ interface Document {
   status: string
   created_at: string
 }
+
+const SHARED_USER_ID = 1
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
@@ -84,6 +87,7 @@ export default function DocumentsPage() {
 
   const filteredDocuments = documents.filter(doc => {
     if (filter === 'all') return true
+    if (filter === 'shared') return doc.user_id === SHARED_USER_ID
     return doc.document_type === filter
   })
 
@@ -91,7 +95,7 @@ export default function DocumentsPage() {
     <div className="max-w-6xl mx-auto">
       <h2 className="text-3xl font-bold mb-2">Document Management</h2>
       <p className="text-gray-600 mb-8">
-        View and manage your uploaded documents
+        View and manage your uploaded documents. Documents marked <strong>Shared</strong> are available to all users.
       </p>
 
       {/* Alert Messages */}
@@ -184,6 +188,11 @@ export default function DocumentsPage() {
                         <span className={`text-xs px-2 py-1 rounded ${getDocumentTypeColor(doc.document_type)}`}>
                           {getDocumentTypeLabel(doc.document_type)}
                         </span>
+                        {doc.user_id === SHARED_USER_ID && (
+                          <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">
+                            Shared
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
                         <div>Size: {formatFileSize(doc.file_size)}</div>
@@ -194,13 +203,15 @@ export default function DocumentsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => handleDelete(doc.id, doc.original_filename)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete document"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    {doc.user_id !== SHARED_USER_ID && (
+                      <button
+                        onClick={() => handleDelete(doc.id, doc.original_filename)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete document"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
