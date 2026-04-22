@@ -1,35 +1,32 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-21 (End of Day)  
+**Last updated:** 2026-04-22  
 **Current branch:** main  
-**Working on:** v0.3.0 released — Authentik auth live in production
+**Working on:** Phase 1.9 — Draft management + gap report complete, deployed to both containers
 
 ---
 
 ## Current Task
-**Phase 1.8 Authentication — COMPLETE, v0.3.0 released** - READY FOR NEXT PHASE
+**Phase 1.9 Draft Management + Gap Report — COMPLETE**
 
-Authentik OAuth2/OIDC authentication fully implemented and released to production. Both blue and green containers synced on v0.3.0. Playwright E2E suite live on qa-01 (26/28 passing).
+Draft duplicate and gap/suggestion report shipped to both blue and green containers.
 
-### Recent completions (April 21, 2026)
-- ✅ **Phase 1.8 Authentication** — Authentik OIDC, protected routes, JWT sessions, user nav
-- ✅ **TEMP_USER_ID fully removed** — all endpoints scoped to `current_user.id`
-- ✅ **Playwright E2E suite** — global-setup drives Authentik flow executor API (headless-safe), 26/28 passing on qa-01
-- ✅ **v0.3.0 released** — bumped, release notes created, committed, pushed
-- ✅ **Both containers synced** — tip-blue and tip-green on v0.3.0 with correct `.env`
-- ✅ **quote_plus fix** — scope encoding corrected to prevent Authentik `%20` double-encoding
+### Recent completions (April 22, 2026)
+- ✅ **Draft duplicate** — `POST /api/generate/drafts/{id}/duplicate` backend endpoint
+- ✅ **Gap report endpoint** — `GET /api/generate/drafts/{id}/gaps` scans `[DATA NEEDED: ...]` placeholders
+- ✅ **DraftsPage UI** — Copy icon button added to draft row (duplicates immediately, inserts at top)
+- ✅ **DraftViewPage UI** — "Gaps" button in header opens amber collapsible panel with numbered gap list
+- ✅ **Both containers deployed** — tip-blue (CT190) and tip-green (CT191) on latest main
 
 ### Next steps
-1. **Add `https://tip.cloudigan.net/api/auth/callback` to Authentik** — TIP Generator Provider → Redirect URIs (needed for production login)
-2. **Start Phase 1.9 — pick highest priority backlog item** (PDF export or Excel parser tuning)
-3. **Revision History author** — currently hardcoded to `"TIP Generator Admin"`; will auto-resolve when user records exist post-auth — verify this is working now
-4. **Run `/test-release` smoke check** after adding Authentik redirect URI
+1. **Add `https://tip.cloudigan.net/api/auth/callback` to Authentik** (manual — still pending)
+2. **BYOK Claude API key** — user profile field for personal Claude API key
+3. **Excel parser tuning** — validate against real discovery workbooks
 
 ---
 
 ## Known Issues
-- ⚠️ **Authentik redirect URI not registered for production** — `https://tip.cloudigan.net/api/auth/callback` must be added to Authentik → TIP Generator Provider → Redirect URIs before production login works. Currently only `blue-tip.cloudigan.net` is registered.
-- ⚠️ **HAProxy MCP status inconsistent** — MCP reports BLUE as LIVE even after switch_traffic succeeded. Manual verification shows both containers healthy. Low risk, worth investigating.
+- ⚠️ **Authentik redirect URI not registered for production** — must be added to Authentik → TIP Generator Provider → Redirect URIs before production login works
 - ℹ️ **2 Playwright tests skipped** — documents and drafts specs have skipped tests (not failures); acceptable for now.
 
 ---
@@ -40,11 +37,8 @@ Authentik OAuth2/OIDC authentication fully implemented and released to productio
 #    https://auth.cloudigan.net → Applications → TIP Generator → Provider → Redirect URIs
 #    Add: https://tip.cloudigan.net/api/auth/callback
 
-# 2. Verify production login works
-curl -si https://tip.cloudigan.net/api/auth/login | grep location
-
-# 3. Start next phase
-/start-day
+# 2. Test gap report on a real draft
+#    curl -si https://blue-tip.cloudigan.net/api/generate/drafts/{id}/gaps
 ```
 
 ---

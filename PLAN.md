@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
-**Last updated:** 2026-04-20  
-**Current phase:** Active refinement — export quality, generation prompt discipline  
-**Status:** Phases 1.1–1.6 complete; 1.7 and Authentication next
+**Last updated:** 2026-04-22  
+**Current phase:** Phase 1.9 — Draft management, gap report  
+**Status:** Phases 1.1–1.8 complete; 1.9 in progress
 
 ---
 
@@ -16,8 +16,9 @@
 ## Current Phase: Export Quality + Generation Discipline
 
 ### Active Work (IN PROGRESS)
-- ⏳ Generation progress UX (Phase 1.7)
-- ⏳ Authentication (Authentik OAuth2/OIDC)
+- ✅ Draft duplicate — `POST /api/generate/drafts/{id}/duplicate`
+- ✅ Gap/suggestion report — `GET /api/generate/drafts/{id}/gaps` + Gaps panel in DraftViewPage
+- ⏳ Next: BYOK Claude API key or Admin dashboard
 
 ---
 
@@ -107,17 +108,17 @@
 
 ### High Priority
 - **Add production Authentik redirect URI** — `https://tip.cloudigan.net/api/auth/callback` must be registered in Authentik provider (5 min task)
-- **PDF export** — convert docx to PDF (LibreOffice headless already on containers)
-- **Excel parser tuning** — validate against real discovery workbooks, handle edge cases (merged cells, dropdowns, nested tables)
+- ~~**PDF export**~~ — ✅ implemented (`/drafts/{id}/export/pdf`, LibreOffice headless)
+- **Excel parser tuning** — validate against real discovery workbooks; merged cells ✅ handled; remaining: dropdowns, nested tables, edge cases
 
 ### Medium Priority
-- **Draft management** — delete drafts, rename, duplicate
+- ~~**Draft management** — delete drafts, rename, duplicate~~ ✅ all three complete
+- ~~**Gap/suggestion report**~~ ✅ implemented (`GET /drafts/{id}/gaps` + Gaps panel)
 - **Generation history** — track which documents/template version produced each draft
 - **BYOK Claude API key** — user profile field for personal Claude API key; generation uses it if set, falls back to system key
 - **Admin dashboard** — user management UI, usage/cost stats, API key status per user
 - **Template Claude instructions** — add `[CLAUDE: ...]` markers to actual template .docx and verify they're picked up
 - **Prompt quality iteration** — review first real TIP output and refine prompts
-- **Gap/suggestion report** — explicit section listing all `[DATA NEEDED:]` placeholders found in the generated TIP
 
 ### Low Priority
 - **Multi-user support** — user management, role-based permissions, draft sharing
@@ -134,11 +135,11 @@
 - AI Assist was silently timing out (sync Claude call blocking async event loop) — **fixed 2026-04-20** via ThreadPoolExecutor
 - Revision History was pulling date from discovery doc instead of server date — **fixed 2026-04-20** (deterministic post-process on generation + refine)
 - **Revision History author** shows `"TIP Generator Admin"` until real auth is implemented — blocked on Phase 1.8
-- Excel merged cells not handled (openpyxl `data_only=True` limitation)
+- ~~Excel merged cells not handled~~ — ✅ `build_merge_map()` resolves all cells in merged ranges
 - SSH host key churn on CT190/CT191 after Proxmox maintenance — auto-handled by SSH config now
 - ~~TIP Generator not yet registered in MCP server~~ — **resolved 2026-04-20**
 - Generated docs may still contain `[DATA NEEDED: ...]` placeholders — expected, requires human review before delivery
-- PDF export not yet implemented — docx only for now
+- ~~PDF export not yet implemented~~ — ✅ done
 
 ---
 
