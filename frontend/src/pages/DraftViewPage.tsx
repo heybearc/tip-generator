@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -15,6 +15,12 @@ interface Draft {
   generation_tokens: number | null
   created_at: string
   generated_at: string | null
+}
+
+interface Gap {
+  section: string | null
+  placeholder: string
+  detail: string
 }
 
 interface ChatMessage {
@@ -282,8 +288,31 @@ export default function DraftViewPage() {
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Gap report
+  const [gapsOpen, setGapsOpen] = useState(false)
+  const [gaps, setGaps] = useState<Gap[] | null>(null)
+  const [gapsLoading, setGapsLoading] = useState(false)
+
   useEffect(() => { loadDraft() }, [id])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
+
+  const loadGaps = async () => {
+    if (!id) return
+    setGapsLoading(true)
+    try {
+      const res = await axios.get(`${API_URL}/generate/drafts/${id}/gaps`)
+      setGaps(res.data.gaps)
+    } catch {
+      setGaps([])
+    } finally {
+      setGapsLoading(false)
+    }
+  }
+
+  const toggleGaps = () => {
+    if (!gapsOpen && gaps === null) loadGaps()
+    setGapsOpen(prev => !prev)
+  }
 
   const loadDraft = async () => {
     setLoading(true)
@@ -456,6 +485,17 @@ export default function DraftViewPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {draft.status === 'completed' && (
+            <button
+              onClick={toggleGaps}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                gapsOpen ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {gapsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+              {gaps !== null ? `Gaps (${gaps.length})` : 'Gaps'}
+            </button>
+          )}
           <button
             onClick={() => setChatOpen(!chatOpen)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
@@ -487,6 +527,30 @@ export default function DraftViewPage() {
           </div>
         </div>
       </div>
+
+      {gapsOpen && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <ClipboardList className="w-4 h-4 text-amber-600" />
+            <span className="font-semibold text-sm text-amber-800">
+              {gapsLoading ? 'Scanning for gaps…' : gaps && gaps.length > 0 ? `${gaps.length} gap${gaps.length !== 1 ? 's' : ''} found — items marked [DATA NEEDED]` : 'No gaps found — all placeholders resolved'}
+            </span>
+          </div>
+          {gaps && gaps.length > 0 && (
+            <div className="space-y-1.5">
+              {gaps.map((g, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-xs font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                  <div>
+                    {g.section && <span className="text-amber-600 font-medium">{g.section}: </span>}
+                    <span className="text-gray-700">{g.detail}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className={`grid gap-4 ${chatOpen ? 'grid-cols-3' : 'grid-cols-1'}`}>
         {/* Sections */}

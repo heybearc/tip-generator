@@ -255,6 +255,63 @@ async def delete_draft(
     return {"message": "Draft deleted", "id": draft_id}
 
 
+@router.post("/drafts/{draft_id}/duplicate", response_model=DraftResponse)
+async def duplicate_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Create a copy of a draft owned by the current user."""
+    original = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    copy = Draft(
+        user_id=current_user.id,
+        template_id=original.template_id,
+        template_file_id=original.template_file_id,
+        title=f"{original.title} (Copy)",
+        description=original.description,
+        status=DraftStatus.COMPLETED if original.status == DraftStatus.COMPLETED else DraftStatus.DRAFT,
+        discovery_document_id=original.discovery_document_id,
+        service_order_document_id=original.service_order_document_id,
+        content=original.content,
+        sections=dict(original.sections) if original.sections else None,
+        claude_model=original.claude_model,
+        generation_tokens=original.generation_tokens,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return copy
+
+
+@router.get("/drafts/{draft_id}/gaps")
+async def get_draft_gaps(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Scan draft content for [DATA NEEDED: ...] placeholders and return them."""
+    import re
+    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    text = draft.content or ""
+    pattern = re.compile(r'\[DATA NEEDED:\s*(.*?)\]', re.IGNORECASE | re.DOTALL)
+
+    gaps = []
+    if draft.sections:
+        for section_key, section_content in draft.sections.items():
+            for m in pattern.finditer(section_content or ""):
+                gaps.append({"section": section_key, "placeholder": m.group(0).strip(), "detail": m.group(1).strip()})
+    else:
+        for m in pattern.finditer(text):
+            gaps.append({"section": None, "placeholder": m.group(0).strip(), "detail": m.group(1).strip()})
+
+    return {"draft_id": draft_id, "gap_count": len(gaps), "gaps": gaps}
+
+
 @router.patch("/drafts/{draft_id}/sections/{section_key:path}")
 async def update_draft_section(
     draft_id: int,

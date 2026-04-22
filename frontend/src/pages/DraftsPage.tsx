@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -100,6 +100,16 @@ export default function DraftsPage() {
       setDrafts(prev => prev.filter(d => d.id !== draftId))
     } catch {
       setError('Failed to delete draft')
+    }
+  }
+
+  const handleDuplicate = async (e: { stopPropagation: () => void }, draftId: number) => {
+    e.stopPropagation()
+    try {
+      const res = await axios.post(`${API_URL}/generate/drafts/${draftId}/duplicate`)
+      setDrafts(prev => [res.data, ...prev])
+    } catch {
+      setError('Failed to duplicate draft')
     }
   }
 
@@ -221,6 +231,13 @@ export default function DraftsPage() {
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 )}
+                <button
+                  onClick={e => handleDuplicate(e, draft.id)}
+                  className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                  title="Duplicate draft"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={e => handleDelete(e, draft.id)}
                   className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
