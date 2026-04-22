@@ -1,23 +1,24 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (Phase 2.2 confirmed complete)
+**Last updated:** 2026-04-22 (v0.6.0 released — Phase 2.3 complete)
 **Current branch:** main
-**Working on:** Phase 2.3 — Draft Collaboration
+**Working on:** Phase 2.4 (TBD)
 
 ---
 
 ## Current Task
-**Phase 2.3 — Draft Collaboration (starting)**
+**Idle — awaiting next phase direction**
 
 ### Confirmed Complete
-- ✅ **Phase 2.1** — Admin dashboard (Users/Docs/Drafts tabs, stats, role/active toggles)
-- ✅ **Phase 2.2** — TIP Library (`library_documents` table, upload/approve/reject/delete, Claude auto-category, text extraction, few-shot injection, `LibraryPage.tsx`, RAG-ready schema)
-- ✅ **v0.5.0 / v0.5.1** — Library injection, purple badge, `library_examples_used` persisted
-- ✅ **LIVE=BLUE** (CT190, 10.92.3.91) | STANDBY=GREEN (CT191, 10.92.3.92)
+- ✅ **Phase 2.1** — Admin dashboard
+- ✅ **Phase 2.2** — TIP Library (few-shot injection, RAG-ready schema)
+- ✅ **Phase 2.3** — Draft Collaboration (collaborators table, invite/remove, typeahead search, shared badge)
+- ✅ **v0.6.0** — LIVE=GREEN (CT191, 10.92.3.92) | STANDBY=BLUE (CT190, 10.92.3.91)
 
 ### Next steps
-1. **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
-2. **Excel parser tuning** — validate against real discovery workbooks (backlog)
+1. **Phase 2.4** — TBD
+2. **Few-shot injection quality** — backlog: category matching, semantic similarity (see PLAN.md)
+3. **Excel parser tuning** — validate against real discovery workbooks (backlog)
 
 ---
 
@@ -36,4 +37,4 @@
 - Auth: Authentik at auth.cloudigan.net, OIDC client `MFO9C9ynlvpoX895YRSutwCl7xBouyAy4oOjNmI9`
 - E2E tests: qa-01 `/opt/tests/tip-generator/` — run with `npx playwright test`
 - Deploy: `ssh tip-blue 'cd /opt/tip-generator && git pull && /opt/tip-generator/deploy.sh'`
-- Current LIVE: BLUE (CT190, 10.92.3.91) — switched 2026-04-22 after v0.5.1 release
+- Current LIVE: GREEN (CT191, 10.92.3.92) — switched 2026-04-22 after v0.6.0 release

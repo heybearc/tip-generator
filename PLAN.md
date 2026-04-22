@@ -22,7 +22,7 @@
 - ✅ Dynamic OAuth redirect — `_base_url(request)` replaces hardcoded env vars
 - ✅ **Phase 2.1: Admin dashboard** — Users/Docs/Drafts tabs, stats strip, role/active toggles, full model display
 - ✅ **Phase 2.2: TIP Library** — `library_documents` table, upload/approve/reject/delete API, Claude auto-category, text extraction, few-shot injection at generation time, RAG-ready schema (`embedding` field reserved), `LibraryPage.tsx`
-- ⏳ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
+- ✅ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, typeahead user search, global doc visibility, shared badge in DraftsPage
 
 ---
 
