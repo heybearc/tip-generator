@@ -137,8 +137,14 @@ export default function LibraryPage() {
 
       const res = await fetch('/api/library', { method: 'POST', credentials: 'include', body: fd })
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Upload failed')
+        let detail = 'Upload failed'
+        try {
+          const err = await res.json()
+          detail = err.detail || detail
+        } catch {
+          detail = await res.text().catch(() => detail)
+        }
+        throw new Error(detail)
       }
       setShowUpload(false)
       setUploadFile(null)
