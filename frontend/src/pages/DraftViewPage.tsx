@@ -82,11 +82,13 @@ function SectionEditor({
   sectionKey,
   content,
   onSave,
+  libraryInfluenced,
 }: {
   draftId: number
   sectionKey: string
   content: string
   onSave: (key: string, value: string) => Promise<void>
+  libraryInfluenced?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -147,6 +149,11 @@ function SectionEditor({
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
           <span className="font-semibold text-sm text-gray-900 truncate">{sectionKey}</span>
           <span className="text-xs text-gray-400 flex-shrink-0">{wordCount}w</span>
+          {libraryInfluenced && (
+            <span title="Content influenced by TIP Library examples" className="flex-shrink-0">
+              <BookOpen className="w-3 h-3 text-purple-400" />
+            </span>
+          )}
         </div>
         {!expanded && <span className="text-xs text-gray-400 ml-4 truncate max-w-xs hidden md:block">{preview}…</span>}
         {expanded && !editing && (
@@ -573,6 +580,7 @@ export default function DraftViewPage() {
                 sectionKey={key}
                 content={value || ''}
                 onSave={handleSaveSection}
+                libraryInfluenced={!!(draft.library_examples_used && draft.library_examples_used.length > 0)}
               />
             ))
           ) : draft.content ? (
