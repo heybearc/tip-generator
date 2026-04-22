@@ -125,6 +125,7 @@ class TemplateParser:
         Extract Claude instructions marked with special tags
         
         Looks for patterns like:
+        [INSTRUCTION: instruction text]
         [CLAUDE: instruction text]
         or
         <!-- CLAUDE: instruction text -->
@@ -145,7 +146,18 @@ class TemplateParser:
             # Look for instruction patterns
             text = para.text
             
-            # Pattern 1: [CLAUDE: ...]
+            # Pattern 1: [INSTRUCTION: ...] — used by v2 template build script
+            # Greedy match to handle nested brackets inside instruction text
+            instruction_pattern = r'\[INSTRUCTION:\s*(.*)\]'
+            matches = re.findall(instruction_pattern, text, re.IGNORECASE | re.DOTALL)
+            for match in matches:
+                instructions.append({
+                    "text": match.strip(),
+                    "section": current_section,
+                    "type": self._classify_instruction(match)
+                })
+            
+            # Pattern 2: [CLAUDE: ...]
             claude_pattern = r'\[CLAUDE:\s*([^\]]+)\]'
             matches = re.findall(claude_pattern, text, re.IGNORECASE)
             for match in matches:
@@ -155,7 +167,7 @@ class TemplateParser:
                     "type": self._classify_instruction(match)
                 })
             
-            # Pattern 2: <!-- CLAUDE: ... -->
+            # Pattern 3: <!-- CLAUDE: ... -->
             comment_pattern = r'<!--\s*CLAUDE:\s*([^-]+)-->'
             matches = re.findall(comment_pattern, text, re.IGNORECASE)
             for match in matches:

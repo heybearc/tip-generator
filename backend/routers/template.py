@@ -253,6 +253,49 @@ async def update_instructions(
         raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
 
+@router.post("/{template_id}/reparse")
+async def reparse_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Re-run the template parser against the stored file and update template_structure in the DB.
+    Use this after updating the parser logic without re-uploading the file.
+    """
+    template = db.query(TemplateFile).filter(TemplateFile.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if not os.path.exists(template.file_path):
+        raise HTTPException(status_code=404, detail="Template file not found on disk")
+
+    try:
+        parsed_structure = parse_template_file(template.file_path)
+        # Preserve any existing instruction_overrides
+        existing_overrides = {}
+        if template.template_structure:
+            try:
+                existing = json.loads(template.template_structure)
+                existing_overrides = existing.get("instruction_overrides", {})
+            except Exception:
+                pass
+        if existing_overrides:
+            parsed_structure["instruction_overrides"] = existing_overrides
+        template.template_structure = json.dumps(parsed_structure)
+        db.commit()
+        structure = parsed_structure
+        instruction_count = len(structure.get("instructions", []))
+        section_count = len(structure.get("sections", []))
+        return {
+            "message": f"Template {template_id} reparsed successfully",
+            "sections": section_count,
+            "instructions": instruction_count,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Reparse failed: {str(e)}")
+
+
 @router.get("/{template_id}/structure")
 async def get_template_structure(
     template_id: int,
