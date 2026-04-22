@@ -15,14 +15,10 @@ from models.document import Document
 SINGLE_PASS_CHAR_LIMIT = 40_000   # Combined doc text under this → single pass
 SECTION_CHUNK_SIZE = 5            # Sections per chunk in chunked mode
 
-# ── Prompt caching + Batch API ──────────────────────────────────────────────
-# SYSTEM_PREAMBLE: identical on every generation call — marked for caching.
-# Anthropic caches ephemeral blocks for up to 5 min (10 min on Sonnet 3.5+).
-# Saves ~90% of input token cost on repeated calls within the cache window.
-#
-# BATCH API: used for refine-all (whole-doc refinement).
-# All section requests are submitted in one batch → 50% discount on all tokens.
-# Batch results are polled every 3s; typical latency 10-60s for a full TIP.
+# ── Prompt caching ───────────────────────────────────────────────────────────
+# SYSTEM_PREAMBLE is identical on every generation call — marked cache_control=ephemeral.
+# Anthropic caches this block for up to 5 min, charging ~10% of normal input token price
+# on cache hits. Applied to: generation (single-pass + chunked), refine-guided, refine-all.
 SYSTEM_PREAMBLE = (
     "You are an expert technical writer creating Technical Implementation Plans (TIPs) "
     "for Thrive Networks, a Managed Service Provider. "
@@ -500,84 +496,6 @@ class ClaudeService:
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
-
-    async def batch_refine_all_sections(
-        self,
-        sections: Dict[str, str],
-        instruction: str,
-        poll_interval: int = 3,
-        timeout: int = 300,
-    ) -> Dict[str, str]:
-        """
-        Apply a free-text instruction to every section using the Anthropic Batch API.
-        Submits all section requests in a single batch (50% token discount vs individual calls).
-        Polls until complete (max `timeout` seconds) then returns {section_key: revised_text}.
-        Falls back to parallel individual calls if batch API is unavailable.
-        """
-        import asyncio, time
-
-        REFINE_SYSTEM = (
-            "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
-            "Apply the user's instruction to the section content provided. "
-            "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
-            "Preserve all customer-specific details, IP addresses, server names, dates. "
-            "Use markdown formatting. Do not invent facts."
-        )
-
-        non_empty = {k: v for k, v in sections.items() if v and v.strip()}
-        if not non_empty:
-            return {}
-
-        requests = [
-            {
-                "custom_id": key,
-                "params": {
-                    "model": self.model,
-                    "max_tokens": 1500,
-                    "system": [
-                        {
-                            "type": "text",
-                            "text": REFINE_SYSTEM,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Section: {key}\n\n"
-                                f"Instruction: {instruction}\n\n"
-                                f"Current content:\n{content[:8000]}\n\n"
-                                "Apply the instruction above to this section."
-                            ),
-                        }
-                    ],
-                },
-            }
-            for key, content in non_empty.items()
-        ]
-
-        batch = self.client.messages.batches.create(requests=requests)
-        batch_id = batch.id
-
-        # Poll until processing_status == "ended"
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            await asyncio.sleep(poll_interval)
-            status = self.client.messages.batches.retrieve(batch_id)
-            if status.processing_status == "ended":
-                break
-        else:
-            raise TimeoutError(f"Batch {batch_id} did not complete within {timeout}s")
-
-        results: Dict[str, str] = {}
-        for result in self.client.messages.batches.results(batch_id):
-            if result.result.type == "succeeded":
-                results[result.custom_id] = result.result.message.content[0].text
-            else:
-                results[result.custom_id] = non_empty[result.custom_id]
-
-        return results
 
     def _fix_revision_history(self, content: str, author_name: str, today_str: str) -> str:
         """

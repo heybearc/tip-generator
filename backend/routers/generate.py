@@ -561,12 +561,11 @@ async def refine_all_sections(
 ):
     """Apply a free-text instruction to every section of the draft and return revised sections.
 
-    Uses the Anthropic Batch API (50% token discount) with prompt caching on the system prompt.
-    Falls back to parallel individual calls if the batch times out.
+    Runs all section calls in parallel (ThreadPoolExecutor) with prompt caching on the
+    system block — real-time response, no async batch latency.
     """
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
-    from services.claude import ClaudeService
 
     instruction = (body.get("instruction") or "").strip()
     if not instruction:
@@ -580,54 +579,45 @@ async def refine_all_sections(
         raise HTTPException(status_code=400, detail="Draft has no sections to refine")
 
     try:
-        claude = ClaudeService(api_key=current_user.claude_api_key)
-        try:
-            sections = await claude.batch_refine_all_sections(
-                sections=draft.sections,
-                instruction=instruction,
-                poll_interval=3,
-                timeout=270,
+        import anthropic as _anthropic
+
+        REFINE_SYSTEM = [
+            {
+                "type": "text",
+                "text": (
+                    "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
+                    "Apply the user's instruction to the section content provided. "
+                    "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
+                    "Preserve all customer-specific details, IP addresses, server names, dates. "
+                    "Use markdown formatting. Do not invent facts."
+                ),
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+        model = current_user.claude_model or "claude-sonnet-4-5"
+
+        def _refine_section(key: str, content: str) -> tuple[str, str]:
+            client = _anthropic.Anthropic(api_key=current_user.claude_api_key)
+            prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
+            msg = client.messages.create(
+                model=model,
+                max_tokens=1500,
+                system=REFINE_SYSTEM,
+                messages=[{"role": "user", "content": prompt}]
             )
-        except (TimeoutError, Exception):
-            # Fallback: parallel individual calls with caching
-            import anthropic as _anthropic
+            return key, msg.content[0].text
 
-            REFINE_SYSTEM = [
-                {
-                    "type": "text",
-                    "text": (
-                        "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
-                        "Apply the user's instruction to the section content provided. "
-                        "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
-                        "Preserve all customer-specific details, IP addresses, server names, dates. "
-                        "Use markdown formatting. Do not invent facts."
-                    ),
-                    "cache_control": {"type": "ephemeral"},
-                }
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            tasks = [
+                loop.run_in_executor(pool, _refine_section, k, v)
+                for k, v in draft.sections.items()
+                if v and v.strip()
             ]
+            results = await asyncio.gather(*tasks)
 
-            def _refine_section(key: str, content: str) -> tuple[str, str]:
-                client = _anthropic.Anthropic(api_key=current_user.claude_api_key)
-                prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
-                msg = client.messages.create(
-                    model=claude.model,
-                    max_tokens=1500,
-                    system=REFINE_SYSTEM,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return key, msg.content[0].text
-
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor(max_workers=4) as pool:
-                tasks = [
-                    loop.run_in_executor(pool, _refine_section, k, v)
-                    for k, v in draft.sections.items()
-                    if v and v.strip()
-                ]
-                results = await asyncio.gather(*tasks)
-            sections = dict(results)
-
-        return {"sections": sections, "instruction": instruction}
+        return {"sections": dict(results), "instruction": instruction}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 
