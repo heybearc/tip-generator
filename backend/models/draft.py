@@ -8,6 +8,20 @@ import enum
 from database.config import Base
 
 
+class DraftDocument(Base):
+    __tablename__ = "draft_documents"
+    __table_args__ = (UniqueConstraint("draft_id", "document_id", name="uq_draft_document"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    draft_id = Column(Integer, ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="supplemental")  # discovery | service_order | supplemental
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    document = relationship("Document")
+
+
 class DraftCollaborator(Base):
     __tablename__ = "draft_collaborators"
     __table_args__ = (UniqueConstraint("draft_id", "user_id", name="uq_draft_collaborator"),)
@@ -65,6 +79,7 @@ class Draft(Base):
     discovery_document = relationship("Document", foreign_keys=[discovery_document_id])
     service_order_document = relationship("Document", foreign_keys=[service_order_document_id])
     collaborators = relationship("DraftCollaborator", backref="draft", cascade="all, delete-orphan", foreign_keys="DraftCollaborator.draft_id")
+    draft_documents = relationship("DraftDocument", cascade="all, delete-orphan", foreign_keys="DraftDocument.draft_id")
 
     def __repr__(self):
         return f"<Draft(id={self.id}, title={self.title}, status={self.status})>"

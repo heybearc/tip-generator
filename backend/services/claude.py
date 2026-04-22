@@ -87,6 +87,7 @@ class ClaudeService:
         db: Session,
         template_structure: Optional[Dict[str, Any]] = None,
         library_examples: Optional[List[Dict[str, str]]] = None,
+        supplemental_docs: Optional[List[Document]] = None,
     ) -> Draft:
         """
         Generate TIP using Claude API.
@@ -117,11 +118,13 @@ class ClaudeService:
                 generated_content, total_tokens = await self._generate_chunked(
                     draft, discovery_doc, service_order_doc, template_structure, db,
                     library_examples=library_examples,
+                    supplemental_docs=supplemental_docs,
                 )
             else:
                 prompt = self._build_prompt(
                     draft, discovery_doc, service_order_doc, template_structure,
                     library_examples=library_examples,
+                    supplemental_docs=supplemental_docs,
                 )
                 draft.generation_prompt = f"[SINGLE PASS: {doc_size} chars]"
                 db.commit()
@@ -180,6 +183,7 @@ class ClaudeService:
         template_structure: Dict[str, Any],
         db: Optional[Session] = None,
         library_examples: Optional[List[Dict[str, str]]] = None,
+        supplemental_docs: Optional[List[Document]] = None,
     ) -> tuple:
         """
         Generate TIP section by section when documents are large.
@@ -200,6 +204,11 @@ class ClaudeService:
         # Prepare document text — full text, no truncation per chunk
         discovery_text = self._doc_text(discovery_doc)
         service_order_text = self._doc_text(service_order_doc)
+        supplemental_texts = [
+            (d.original_filename, d.extracted_text)
+            for d in (supplemental_docs or [])
+            if d and d.extracted_text
+        ]
 
         # Split sections into chunks
         chunks = [
@@ -231,6 +240,7 @@ class ClaudeService:
                 chunk_index=chunk_idx,
                 total_chunks=total_chunks,
                 library_examples=library_examples,
+                supplemental_texts=supplemental_texts,
             )
 
             response = self.client.messages.create(
@@ -261,6 +271,7 @@ class ClaudeService:
         chunk_index: int,
         total_chunks: int,
         library_examples: Optional[List[Dict[str, str]]] = None,
+        supplemental_texts: Optional[List[tuple]] = None,
     ) -> str:
         """
         Build a prompt for a single chunk of template sections.
@@ -284,6 +295,11 @@ class ClaudeService:
         if service_order_text:
             parts.append("=== SERVICE ORDER ===\n")
             parts.append(service_order_text)
+            parts.append("\n\n")
+
+        for fname, ftext in (supplemental_texts or []):
+            parts.append(f"=== SUPPLEMENTAL DOCUMENT: {fname} ===\n")
+            parts.append(ftext)
             parts.append("\n\n")
 
         if draft.description:
@@ -354,6 +370,7 @@ class ClaudeService:
         service_order_doc: Optional[Document],
         template_structure: Optional[Dict[str, Any]] = None,
         library_examples: Optional[List[Dict[str, str]]] = None,
+        supplemental_docs: Optional[List[Document]] = None,
     ) -> str:
         """
         Build a template-aware prompt for Claude.
@@ -376,6 +393,12 @@ class ClaudeService:
             parts.append("=== SERVICE ORDER ===\n")
             parts.append(service_order_doc.extracted_text)  # Full text — no truncation
             parts.append("\n\n")
+
+        for d in (supplemental_docs or []):
+            if d and d.extracted_text:
+                parts.append(f"=== SUPPLEMENTAL DOCUMENT: {d.original_filename} ===\n")
+                parts.append(d.extracted_text)
+                parts.append("\n\n")
 
         if draft.description:
             parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")

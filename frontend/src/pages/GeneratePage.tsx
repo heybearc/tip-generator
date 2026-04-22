@@ -34,8 +34,8 @@ export default function GeneratePage() {
   const navigate = useNavigate()
   const [documents, setDocuments] = useState<Document[]>([])
   const [currentTemplate, setCurrentTemplate] = useState<CurrentTemplate | null>(null)
-  const [discoveryDocId, setDiscoveryDocId] = useState<number | null>(null)
-  const [serviceOrderDocId, setServiceOrderDocId] = useState<number | null>(null)
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set())
+  const [docRoles, setDocRoles] = useState<Record<number, string>>({})
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -67,6 +67,29 @@ export default function GeneratePage() {
     }
   }
 
+  const toggleDoc = (id: number) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+        setDocRoles(r => { const copy = { ...r }; delete copy[id]; return copy })
+      } else {
+        next.add(id)
+        // Auto-assign role based on doc type
+        const doc = documents.find(d => d.id === id)
+        const defaultRole = doc?.document_type === 'discovery_excel' ? 'discovery'
+          : doc?.document_type === 'service_order_pdf' ? 'service_order'
+          : 'supplemental'
+        setDocRoles(r => ({ ...r, [id]: defaultRole }))
+      }
+      return next
+    })
+  }
+
+  const setRole = (id: number, role: string) => {
+    setDocRoles(r => ({ ...r, [id]: role }))
+  }
+
   const handleGenerate = async () => {
     if (!title.trim()) {
       setError('Please enter a title for this TIP')
@@ -77,12 +100,17 @@ export default function GeneratePage() {
     setProgress(null)
     if (pollRef.current) clearInterval(pollRef.current)
 
+    const discoveryDocId = [...selectedDocIds].find(id => docRoles[id] === 'discovery') ?? null
+    const serviceOrderDocId = [...selectedDocIds].find(id => docRoles[id] === 'service_order') ?? null
+    const supplementalDocIds = [...selectedDocIds].filter(id => docRoles[id] === 'supplemental')
+
     try {
       const createRes = await axios.post(`${API_URL}/generate/draft`, {
         title: title.trim(),
         description: description.trim() || null,
         discovery_document_id: discoveryDocId,
         service_order_document_id: serviceOrderDocId,
+        supplemental_document_ids: supplementalDocIds.length ? supplementalDocIds : null,
       })
       const draftId = createRes.data.id
 
@@ -144,13 +172,6 @@ export default function GeneratePage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
 
-  const discoveryDocs = documents.filter(d =>
-    d.document_type === 'discovery_excel' || d.document_type === 'other'
-  )
-  const serviceOrderDocs = documents.filter(d =>
-    d.document_type === 'service_order_pdf' || d.document_type === 'other'
-  )
-
   const formatSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
@@ -203,38 +224,57 @@ export default function GeneratePage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Discovery Worksheet</label>
-            <select
-              value={discoveryDocId ?? ''}
-              onChange={e => setDiscoveryDocId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">— None —</option>
-              {discoveryDocs.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.user_id === 1 ? '⬡ ' : ''}{d.original_filename} ({formatSize(d.file_size)})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Service Order</label>
-            <select
-              value={serviceOrderDocId ?? ''}
-              onChange={e => setServiceOrderDocId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">— None —</option>
-              {serviceOrderDocs.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.user_id === 1 ? '⬡ ' : ''}{d.original_filename} ({formatSize(d.file_size)})
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Source Documents
+            {selectedDocIds.size > 0 && (
+              <span className="ml-2 text-xs font-normal text-blue-600">{selectedDocIds.size} selected</span>
+            )}
+          </label>
+          {documents.length === 0 ? null : (
+            <div className="border rounded-lg divide-y overflow-hidden">
+              {documents.map(doc => {
+                const checked = selectedDocIds.has(doc.id)
+                const role = docRoles[doc.id] ?? 'supplemental'
+                const typeLabel = doc.document_type === 'discovery_excel' ? 'xlsx'
+                  : doc.document_type === 'service_order_pdf' ? 'pdf'
+                  : doc.document_type === 'other' ? 'file' : doc.document_type
+                return (
+                  <div key={doc.id} className={`flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                    checked ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => toggleDoc(doc.id)}
+                      className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 text-transparent'
+                      }`}
+                    >
+                      {checked && <svg className="w-3 h-3" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    <span className="flex-1 truncate text-gray-800">
+                      {doc.user_id === 1 ? <span className="text-gray-400 mr-1">⬡</span> : null}
+                      {doc.original_filename}
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{formatSize(doc.file_size)}</span>
+                    <span className="text-xs text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 flex-shrink-0">{typeLabel}</span>
+                    {checked && (
+                      <select
+                        value={role}
+                        onChange={e => setRole(doc.id, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        className="text-xs border rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 flex-shrink-0"
+                      >
+                        <option value="discovery">Discovery</option>
+                        <option value="service_order">Service Order</option>
+                        <option value="supplemental">Supplemental</option>
+                      </select>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {documents.length === 0 && (

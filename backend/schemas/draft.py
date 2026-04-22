@@ -3,7 +3,7 @@ Draft schemas for API validation
 """
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from models.draft import DraftStatus
 
 class DraftCreate(BaseModel):
@@ -12,6 +12,7 @@ class DraftCreate(BaseModel):
     description: Optional[str] = None
     discovery_document_id: Optional[int] = None
     service_order_document_id: Optional[int] = None
+    supplemental_document_ids: Optional[List[int]] = None
     template_id: Optional[int] = None
 
 class DraftResponse(BaseModel):

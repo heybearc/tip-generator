@@ -85,10 +85,27 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
 
         discovery_doc = None
         service_order_doc = None
+        supplemental_docs = []
         if draft.discovery_document_id:
             discovery_doc = db.query(Document).filter(Document.id == draft.discovery_document_id).first()
         if draft.service_order_document_id:
             service_order_doc = db.query(Document).filter(Document.id == draft.service_order_document_id).first()
+        # Load supplemental docs from junction table (role='supplemental'), ordered by position
+        try:
+            from models.draft import DraftDocument
+            sup_rows = (
+                db.query(DraftDocument)
+                .filter(DraftDocument.draft_id == draft.id, DraftDocument.role == "supplemental")
+                .order_by(DraftDocument.position)
+                .all()
+            )
+            supplemental_docs = [
+                db.query(Document).filter(Document.id == row.document_id).first()
+                for row in sup_rows
+            ]
+            supplemental_docs = [d for d in supplemental_docs if d and d.extracted_text]
+        except Exception as e:
+            print(f"[generate_tip_task] supplemental doc load skipped: {e}")
 
         template_structure = None
         # Use passed template_file_id or fall back to active template
@@ -139,6 +156,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 draft=draft,
                 discovery_doc=discovery_doc,
                 service_order_doc=service_order_doc,
+                supplemental_docs=supplemental_docs or None,
                 db=db,
                 template_structure=template_structure,
                 library_examples=library_examples or None,

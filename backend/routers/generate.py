@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import io
 from database import get_db
-from models.draft import Draft, DraftStatus, DraftCollaborator
+from models.draft import Draft, DraftStatus, DraftCollaborator, DraftDocument
 from models.document import Document
 from models.template_file import TemplateFile
 from models.user import User as UserModel
@@ -79,7 +79,11 @@ async def create_draft(
     if draft_data.service_order_document_id:
         if not _can_access_doc(draft_data.service_order_document_id):
             raise HTTPException(status_code=404, detail="Service order document not found")
-    
+
+    for sup_id in (draft_data.supplemental_document_ids or []):
+        if not _can_access_doc(sup_id):
+            raise HTTPException(status_code=404, detail=f"Supplemental document {sup_id} not found")
+
     # Create draft
     draft = Draft(
         user_id=current_user.id,
@@ -94,7 +98,21 @@ async def create_draft(
     db.add(draft)
     db.commit()
     db.refresh(draft)
-    
+
+    # Populate draft_documents junction table
+    pos = 0
+    if draft_data.discovery_document_id:
+        db.add(DraftDocument(draft_id=draft.id, document_id=draft_data.discovery_document_id, role="discovery", position=pos))
+        pos += 1
+    if draft_data.service_order_document_id:
+        db.add(DraftDocument(draft_id=draft.id, document_id=draft_data.service_order_document_id, role="service_order", position=pos))
+        pos += 1
+    for sup_id in (draft_data.supplemental_document_ids or []):
+        db.add(DraftDocument(draft_id=draft.id, document_id=sup_id, role="supplemental", position=pos))
+        pos += 1
+    db.commit()
+    db.refresh(draft)
+
     return draft
 
 @router.post("/tip", response_model=GenerateTIPResponse)
