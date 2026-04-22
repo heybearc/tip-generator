@@ -98,9 +98,21 @@ export default function GeneratePage() {
     setProgress(null)
     if (pollRef.current) clearInterval(pollRef.current)
 
-    const discoveryDocId = [...selectedDocIds].find(id => docRoles[id] === 'discovery') ?? null
-    const serviceOrderDocId = [...selectedDocIds].find(id => docRoles[id] === 'service_order') ?? null
-    const supplementalDocIds = [...selectedDocIds].filter(id => docRoles[id] === 'supplemental')
+    const selected = [...selectedDocIds]
+    // For exclusive roles (discovery, service_order) only the first wins; extras spill to supplemental
+    let discoveryDocId: number | null = null
+    let serviceOrderDocId: number | null = null
+    const supplementalDocIds: number[] = []
+    for (const id of selected) {
+      const role = docRoles[id] ?? 'supplemental'
+      if (role === 'discovery' && discoveryDocId === null) {
+        discoveryDocId = id
+      } else if (role === 'service_order' && serviceOrderDocId === null) {
+        serviceOrderDocId = id
+      } else {
+        supplementalDocIds.push(id)
+      }
+    }
 
     try {
       const createRes = await axios.post(`${API_URL}/generate/draft`, {
