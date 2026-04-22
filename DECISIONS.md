@@ -104,9 +104,9 @@ When adding a decision, use this format:
 - **When:** 2026-04-22
 
 
-## D-LOCAL-011: Playwright tests target LIVE; all three redirect URIs registered in Authentik
-- **Decision:** E2E tests run against LIVE (`tip.cloudigan.net`). All three redirect URIs are registered in Authentik: `tip.cloudigan.net`, `blue-tip.cloudigan.net`, `green-tip.cloudigan.net`.
-- **Why:** Tests target LIVE for stability; STANDBY OAuth is technically functional. The `global-setup` fix (URL predicate vs regex) ensures `tip_session` cookie is captured before auth-state.json is saved.
+## D-LOCAL-011: Playwright tests always run against STANDBY (new features live there)
+- **Decision:** E2E tests run against STANDBY, not LIVE. New features are deployed to STANDBY first; that's the environment under test before `/release`.
+- **Why:** Testing STANDBY validates new code before it goes LIVE. All three redirect URIs are registered in Authentik (`tip.cloudigan.net`, `blue-tip.cloudigan.net`, `green-tip.cloudigan.net`), so OAuth works on either node.
 - **When:** 2026-04-22
 
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
