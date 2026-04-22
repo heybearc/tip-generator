@@ -20,7 +20,7 @@
 - ✅ Gap/suggestion report — `GET /api/generate/drafts/{id}/gaps` + Gaps panel in DraftViewPage
 - ✅ BYOK Claude API key — per-user key, no fallback, dynamic model selector
 - ✅ Dynamic OAuth redirect — `_base_url(request)` replaces hardcoded env vars
-- ⏳ **Phase 2.1: Admin dashboard** — user list, deactivate, API key status, usage stats
+- ✅ **Phase 2.1: Admin dashboard** — Users/Docs/Drafts tabs, stats strip, role/active toggles, full model display
 - ⏳ **Phase 2.2: TIP Library** — admin-managed, globally visible, few-shot injection, RAG-ready schema
 - ⏳ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
 

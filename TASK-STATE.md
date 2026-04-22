@@ -1,24 +1,23 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (mid-day, post-v0.5.0 release)  
+**Last updated:** 2026-04-22 (mid-day, admin dashboard deployed)  
 **Current branch:** main  
-**Working on:** v0.5.0 released — next: Admin dashboard or Excel parser tuning
+**Working on:** Phase 2.1 complete — next: Phase 2.2 TIP Library
 
 ---
 
 ## Current Task
-**v0.5.0 RELEASED — BYOK + model chooser complete**
+**Phase 2.1 Admin Dashboard — COMPLETE**
 
 ### Recent completions (April 22, 2026)
-- ✅ **BYOK Claude API key** — `claude_api_key` per user, no system fallback; generation fails clearly if not set
-- ✅ **Dynamic model selector** — `/api/auth/profile/models` fetches live from Anthropic; saved per user
-- ✅ **Profile page** — `/profile` with nav link; save/replace/remove key + model radio selector
-- ✅ **Dynamic OAuth redirect** — `_base_url(request)` replaces hardcoded `OAUTH_REDIRECT_URI`/`FRONTEND_URL`; no more `.env` changes for testing
-- ✅ **Test infra fixed** — STANDBY auth works; `waitForURL` timeout 45s; `qa-01/.env.test` targets STANDBY
-- ✅ **v0.5.0 released** — GREEN is now LIVE; BLUE synced
+- ✅ **Auth 403 fix** — `_base_url()` was forcing `http://` redirect_uri; committed fix that was local-only; deployed to both containers
+- ✅ **Admin dashboard** — `/admin/users` with Users/Documents/Drafts tabs, stats strip, role/active toggles
+- ✅ **Admin backend** — `/api/admin/users`, `/api/admin/stats`, `/api/admin/documents`, `/api/admin/drafts` endpoints
+- ✅ **Model display fixed** — full model ID shown (no more truncation)
+- ✅ **Both containers on `14ba01a`** — BLUE via MCP deploy, GREEN via git pull + build
 
 ### Next steps
-1. **Admin dashboard** — user mgmt, usage/cost stats
+1. **Phase 2.2: TIP Library** — admin-managed, globally visible, few-shot injection, RAG-ready schema
 2. **Excel parser tuning** — validate against real discovery workbooks
 3. **Prompt quality iteration** — review first real TIP and refine
 
