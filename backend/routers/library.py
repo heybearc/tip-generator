@@ -255,7 +255,7 @@ async def upload_library_doc(
     return _build_response(doc, db)
 
 
-@router.patch("/{doc_id}/category")
+@router.patch("/{doc_id}/set-category")
 def update_category(
     doc_id: int,
     body: LibraryCategoryUpdate,

@@ -106,7 +106,7 @@ export default function LibraryPage() {
     if (!val) return
     setSavingCategory(id)
     try {
-      await fetch(`/api/library/${id}/category`, {
+      await fetch(`/api/library/${id}/set-category`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
