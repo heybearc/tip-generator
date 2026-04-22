@@ -22,11 +22,16 @@ router = APIRouter(prefix="/api/auth", tags=["auth"], redirect_slashes=False)
 AUTHENTIK_DOMAIN    = os.getenv("AUTHENTIK_DOMAIN", "auth.cloudigan.net")
 CLIENT_ID           = os.getenv("AUTHENTIK_CLIENT_ID", "")
 CLIENT_SECRET       = os.getenv("AUTHENTIK_CLIENT_SECRET", "")
-REDIRECT_URI        = os.getenv("OAUTH_REDIRECT_URI", "")
 SECRET_KEY          = os.getenv("SECRET_KEY", "changeme")
 JWT_ALGORITHM       = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRY_MINUTES  = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
-FRONTEND_URL        = os.getenv("FRONTEND_URL", "https://blue-tip.cloudigan.net")
+
+
+def _base_url(request: Request) -> str:
+    """Derive scheme+host from the incoming request (works for any domain)."""
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    return f"{scheme}://{host}"
 
 # Authentik OIDC endpoints (app-specific slug)
 _BASE = f"https://{AUTHENTIK_DOMAIN}/application/o/tip-generator"
@@ -86,11 +91,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 async def login(request: Request):
     """Redirect browser to Authentik authorization page."""
     state = secrets.token_urlsafe(32)
+    redirect_uri = f"{_base_url(request)}/api/auth/callback"
     # Store state in a short-lived cookie for CSRF validation
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "scope": "openid email profile",
         "state": state,
     }
@@ -98,7 +104,7 @@ async def login(request: Request):
     # Use default urlencode (quote_plus: spaces→+) for all params except redirect_uri
     # which must remain unencoded to avoid double-encoding in Authentik's next= redirect
     other = {k: v for k, v in params.items() if k != "redirect_uri"}
-    qs = urlencode(other) + "&redirect_uri=" + REDIRECT_URI
+    qs = urlencode(other) + "&redirect_uri=" + redirect_uri
     url = f"{AUTHORIZE_URL}?{qs}"
     response = RedirectResponse(url=url, status_code=302)
     response.set_cookie("oauth_state", state, httponly=True, secure=COOKIE_SECURE,
@@ -116,8 +122,11 @@ async def callback(
     db: Session = Depends(get_db),
 ):
     """Handle Authentik redirect: exchange code for tokens, upsert user, set cookie."""
+    frontend_url = _base_url(request)
+    redirect_uri = f"{frontend_url}/api/auth/callback"
+
     if error:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error={error}")
+        return RedirectResponse(f"{frontend_url}/login?error={error}")
 
     # Exchange code for tokens
     async with httpx.AsyncClient() as client:
@@ -126,7 +135,7 @@ async def callback(
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": REDIRECT_URI,
+                "redirect_uri": redirect_uri,
                 "client_id": CLIENT_ID,
                 "client_secret": CLIENT_SECRET,
             },
@@ -135,7 +144,7 @@ async def callback(
         )
 
     if token_resp.status_code != 200:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=token_exchange_failed")
+        return RedirectResponse(f"{frontend_url}/login?error=token_exchange_failed")
 
     tokens = token_resp.json()
     id_token = tokens.get("id_token", "")
@@ -151,7 +160,7 @@ async def callback(
 
     sub = info.get("sub", "")
     if not sub:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=userinfo_failed")
+        return RedirectResponse(f"{frontend_url}/login?error=userinfo_failed")
 
     # Always fetch userinfo for email/name — id_token only contains sub+aud+iss
     access_token = tokens.get("access_token", "")
@@ -194,7 +203,7 @@ async def callback(
 
     # Issue JWT session cookie and redirect to app
     jwt_token = _make_jwt(user)
-    redirect = RedirectResponse(url=f"{FRONTEND_URL}/", status_code=302)
+    redirect = RedirectResponse(url=f"{frontend_url}/", status_code=302)
     redirect.delete_cookie("oauth_state", path="/")
     _set_cookie(redirect, jwt_token)
     return redirect
