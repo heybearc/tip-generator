@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-22  
-**Current phase:** Phase 2.1 — Admin Dashboard  
-**Status:** v0.5.0 released; BYOK complete; starting admin dashboard
+**Current phase:** Phase 2.3 — Draft Collaboration  
+**Status:** v0.5.1 live; Phases 2.1 + 2.2 complete; starting collaboration
 
 ---
 
@@ -21,7 +21,7 @@
 - ✅ BYOK Claude API key — per-user key, no fallback, dynamic model selector
 - ✅ Dynamic OAuth redirect — `_base_url(request)` replaces hardcoded env vars
 - ✅ **Phase 2.1: Admin dashboard** — Users/Docs/Drafts tabs, stats strip, role/active toggles, full model display
-- ⏳ **Phase 2.2: TIP Library** — admin-managed, globally visible, few-shot injection, RAG-ready schema
+- ✅ **Phase 2.2: TIP Library** — `library_documents` table, upload/approve/reject/delete API, Claude auto-category, text extraction, few-shot injection at generation time, RAG-ready schema (`embedding` field reserved), `LibraryPage.tsx`
 - ⏳ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
 
 ---
@@ -123,6 +123,7 @@
 - **Admin dashboard** — user management UI, usage/cost stats, API key status per user
 - **Template Claude instructions** — add `[CLAUDE: ...]` markers to actual template .docx and verify they're picked up
 - **Prompt quality iteration** — review first real TIP output and refine prompts
+- **Few-shot injection quality** — current impl grabs 2 most-recent approved docs blindly; no relevance scoring. Options: (a) keyword/category match against draft title + discovery doc content, (b) semantic similarity via pgvector (prerequisite: Phase 2.4 embeddings), (c) allow admin to tag library docs with technology keywords for deterministic matching. Current impl is better than nothing but will inject irrelevant examples when library grows. Revisit once library has 5+ docs.
 
 ### Low Priority
 - **Multi-user support** — user management, role-based permissions, draft sharing
@@ -166,7 +167,7 @@
 - Role enforcement — `admin` vs `user` enforced at API level (currently implied only)
 - Usage stats per user — token counts, generation count
 
-### Phase 2.2: TIP Library
+### Phase 2.2: TIP Library ✅ COMPLETE
 - Admin uploads library TIPs (Word/PDF) with metadata: title, category (e.g. "M365 Migration", "Cloud Migration")
 - Globally visible, read-only for non-admins
 - User contribution flow — submit a doc as library candidate → admin approves/rejects

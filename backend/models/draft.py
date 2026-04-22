@@ -1,11 +1,25 @@
 """
 Draft model for TIP work in progress
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, JSON, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from database.config import Base
+
+
+class DraftCollaborator(Base):
+    __tablename__ = "draft_collaborators"
+    __table_args__ = (UniqueConstraint("draft_id", "user_id", name="uq_draft_collaborator"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    draft_id = Column(Integer, ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    invited_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id])
+    inviter = relationship("User", foreign_keys=[invited_by])
 
 class DraftStatus(str, enum.Enum):
     DRAFT = "draft"
@@ -50,6 +64,7 @@ class Draft(Base):
     template = relationship("Template", backref="drafts")
     discovery_document = relationship("Document", foreign_keys=[discovery_document_id])
     service_order_document = relationship("Document", foreign_keys=[service_order_document_id])
+    collaborators = relationship("DraftCollaborator", backref="draft", cascade="all, delete-orphan", foreign_keys="DraftCollaborator.draft_id")
 
     def __repr__(self):
         return f"<Draft(id={self.id}, title={self.title}, status={self.status})>"

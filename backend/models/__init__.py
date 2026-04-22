@@ -3,7 +3,7 @@ Database models
 """
 from .user import User
 from .document import Document
-from .draft import Draft
+from .draft import Draft, DraftCollaborator
 from .template import Template
 from .template_file import TemplateFile
 from .library import LibraryDocument, LibraryStatus

@@ -3,12 +3,14 @@ TIP generation API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 import json
 import io
 from database import get_db
-from models.draft import Draft, DraftStatus
+from models.draft import Draft, DraftStatus, DraftCollaborator
 from models.document import Document
 from models.template_file import TemplateFile
 from models.user import User as UserModel
@@ -18,6 +20,34 @@ from celery_app import generate_tip_task
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
+
+
+def _is_collaborator(db: Session, draft_id: int, user_id: int) -> bool:
+    return db.query(DraftCollaborator).filter(
+        DraftCollaborator.draft_id == draft_id,
+        DraftCollaborator.user_id == user_id,
+    ).first() is not None
+
+
+def _get_draft_readable(db: Session, draft_id: int, user: UserModel) -> Draft:
+    """Return draft if user is owner, collaborator, or admin. 404 otherwise."""
+    draft = db.query(Draft).filter(Draft.id == draft_id).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if draft.user_id == user.id or user.is_superuser or _is_collaborator(db, draft_id, user.id):
+        return draft
+    raise HTTPException(status_code=404, detail="Draft not found")
+
+
+def _get_draft_owned(db: Session, draft_id: int, user: UserModel) -> Draft:
+    """Return draft only if user is owner or admin. 404 otherwise."""
+    draft = db.query(Draft).filter(Draft.id == draft_id).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if draft.user_id == user.id or user.is_superuser:
+        return draft
+    raise HTTPException(status_code=404, detail="Draft not found")
+
 
 def get_claude_service_for_user(user: UserModel) -> ClaudeService:
     if not user.claude_api_key:
@@ -109,15 +139,23 @@ async def list_drafts(
     current_user: UserModel = Depends(get_current_user),
 ):
     """
-    List all drafts for the current user
+    List all drafts owned by or shared with the current user.
     """
+    from sqlalchemy import or_
+    collab_draft_ids = db.query(DraftCollaborator.draft_id).filter(
+        DraftCollaborator.user_id == current_user.id
+    ).subquery()
+
     drafts = db.query(Draft)\
-        .filter(Draft.user_id == current_user.id)\
+        .filter(or_(
+            Draft.user_id == current_user.id,
+            Draft.id.in_(collab_draft_ids),
+        ))\
         .order_by(Draft.created_at.desc())\
         .offset(skip)\
         .limit(limit)\
         .all()
-    
+
     return drafts
 
 @router.patch("/drafts/{draft_id}", response_model=DraftResponse)
@@ -127,9 +165,7 @@ async def update_draft(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
     draft.content = update.content
     if update.title:
         draft.title = update.title
@@ -146,9 +182,7 @@ async def refine_draft(
 ):
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
     if not draft.content and not request.current_content:
         raise HTTPException(status_code=400, detail="Draft has no content to refine")
     try:
@@ -176,13 +210,7 @@ async def get_draft(
     """
     Get details of a specific draft
     """
-    draft = db.query(Draft)\
-        .filter(Draft.id == draft_id, Draft.user_id == current_user.id)\
-        .first()
-    
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
-    
+    draft = _get_draft_readable(db, draft_id, current_user)
     return draft
 
 @router.get("/drafts/{draft_id}/progress")
@@ -195,9 +223,7 @@ async def get_draft_progress(
     Lightweight polling endpoint — returns status and chunk progress only.
     Does NOT return content. Use this during generation instead of GET /drafts/{id}.
     """
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
 
     progress = None
     if draft.generation_prompt:
@@ -229,9 +255,7 @@ async def cancel_draft(
 ):
     """Cancel an in-progress generation: revoke the Celery task and mark draft as failed."""
     from celery_app import celery
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_owned(db, draft_id, current_user)
     if draft.status != DraftStatus.GENERATING:
         raise HTTPException(status_code=400, detail="Draft is not currently generating")
     if draft.celery_task_id:
@@ -248,9 +272,7 @@ async def delete_draft(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_owned(db, draft_id, current_user)
     db.delete(draft)
     db.commit()
     return {"message": "Draft deleted", "id": draft_id}
@@ -263,9 +285,7 @@ async def duplicate_draft(
     current_user: UserModel = Depends(get_current_user),
 ):
     """Create a copy of a draft owned by the current user."""
-    original = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not original:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    original = _get_draft_readable(db, draft_id, current_user)
     copy = Draft(
         user_id=current_user.id,
         template_id=original.template_id,
@@ -294,9 +314,7 @@ async def get_draft_gaps(
 ):
     """Scan draft content for [DATA NEEDED: ...] placeholders and return them."""
     import re
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
 
     text = draft.content or ""
     pattern = re.compile(r'\[DATA NEEDED:\s*(.*?)\]', re.IGNORECASE | re.DOTALL)
@@ -324,9 +342,7 @@ async def update_draft_section(
     """Update a single section of a draft by key.
     section_key may also be passed in body as 'key' to avoid URL slash issues.
     """
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
     # Prefer key from body if present (avoids URL encoding issues with slashes)
     resolved_key = body.get("key") or section_key
     sections = dict(draft.sections or {})
@@ -362,9 +378,7 @@ async def refine_section_guided(
     """Refine a single section using the template instruction for that section type."""
     import os, json as _json
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
 
     import datetime as _dt
     from models.user import User as UserModel
@@ -542,9 +556,7 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), curren
     from docx.enum.style import WD_STYLE_TYPE
     import re, copy
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
     if not draft.content:
         raise HTTPException(status_code=400, detail="Draft has no content to export")
 
@@ -969,9 +981,7 @@ async def export_draft_pdf(draft_id: int, db: Session = Depends(get_db), current
     import os as _os
     import re as _re
 
-    draft = db.query(Draft).filter(Draft.id == draft_id, Draft.user_id == current_user.id).first()
-    if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+    draft = _get_draft_readable(db, draft_id, current_user)
     if not draft.content:
         raise HTTPException(status_code=400, detail="Draft has no content to export")
 
@@ -1013,3 +1023,113 @@ async def export_draft_pdf(draft_id: int, db: Session = Depends(get_db), current
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+# ---------------------------------------------------------------------------
+# Collaborator endpoints
+# ---------------------------------------------------------------------------
+
+class CollaboratorResponse(BaseModel):
+    user_id: int
+    username: str
+    full_name: Optional[str]
+    invited_by_username: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InviteCollaboratorRequest(BaseModel):
+    username: str  # invite by username
+
+
+@router.get("/drafts/{draft_id}/collaborators", response_model=List[CollaboratorResponse])
+async def list_collaborators(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """List all collaborators on a draft. Accessible by owner, collaborators, and admins."""
+    _get_draft_readable(db, draft_id, current_user)
+    rows = db.query(DraftCollaborator).filter(DraftCollaborator.draft_id == draft_id).all()
+    result = []
+    for row in rows:
+        inviter = db.query(UserModel).filter(UserModel.id == row.invited_by).first()
+        result.append(CollaboratorResponse(
+            user_id=row.user_id,
+            username=row.user.username,
+            full_name=row.user.full_name,
+            invited_by_username=inviter.username if inviter else "unknown",
+            created_at=row.created_at,
+        ))
+    return result
+
+
+@router.post("/drafts/{draft_id}/collaborators", response_model=CollaboratorResponse)
+async def add_collaborator(
+    draft_id: int,
+    body: InviteCollaboratorRequest,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Invite a user to collaborate on a draft. Owner and admins only."""
+    draft = _get_draft_owned(db, draft_id, current_user)
+
+    invitee = db.query(UserModel).filter(UserModel.username == body.username).first()
+    if not invitee:
+        raise HTTPException(status_code=404, detail=f"User '{body.username}' not found")
+    if invitee.id == draft.user_id:
+        raise HTTPException(status_code=400, detail="Cannot invite the draft owner as a collaborator")
+
+    existing = db.query(DraftCollaborator).filter(
+        DraftCollaborator.draft_id == draft_id,
+        DraftCollaborator.user_id == invitee.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"User '{body.username}' is already a collaborator")
+
+    collab = DraftCollaborator(
+        draft_id=draft_id,
+        user_id=invitee.id,
+        invited_by=current_user.id,
+    )
+    db.add(collab)
+    db.commit()
+    db.refresh(collab)
+
+    return CollaboratorResponse(
+        user_id=invitee.id,
+        username=invitee.username,
+        full_name=invitee.full_name,
+        invited_by_username=current_user.username,
+        created_at=collab.created_at,
+    )
+
+
+@router.delete("/drafts/{draft_id}/collaborators/{user_id}")
+async def remove_collaborator(
+    draft_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Remove a collaborator from a draft. Owner, admins, or the collaborator themselves."""
+    draft = db.query(Draft).filter(Draft.id == draft_id).first()
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    # Allow owner, admin, or the collaborator removing themselves
+    if draft.user_id != current_user.id and not current_user.is_superuser and current_user.id != user_id:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    row = db.query(DraftCollaborator).filter(
+        DraftCollaborator.draft_id == draft_id,
+        DraftCollaborator.user_id == user_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Collaborator not found")
+
+    db.delete(row)
+    db.commit()
+    return {"message": "Collaborator removed", "draft_id": draft_id, "user_id": user_id}

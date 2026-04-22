@@ -1,23 +1,23 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (v0.5.1 released to LIVE)
+**Last updated:** 2026-04-22 (Phase 2.2 confirmed complete)
 **Current branch:** main
-**Working on:** Idle — v0.5.1 live and stable
+**Working on:** Phase 2.3 — Draft Collaboration
 
 ---
 
 ## Current Task
-**Idle — v0.5.1 live and stable**
+**Phase 2.3 — Draft Collaboration (starting)**
 
-### Completions (April 22, 2026)
-- ✅ **v0.5.0** — Library injection, AI categories, shared docs, Docker support, README rewrite
-- ✅ **v0.5.1** — Library transparency: `library_examples_used` persisted on draft; purple badge in header + `📖` icon on all section headers
-- ✅ **Released** — LIVE=BLUE (CT190, 10.92.3.91), STANDBY=GREEN (CT191, 10.92.3.92), both synced
-- ✅ **DB migration** — `ALTER TABLE drafts ADD COLUMN library_examples_used JSONB` applied
+### Confirmed Complete
+- ✅ **Phase 2.1** — Admin dashboard (Users/Docs/Drafts tabs, stats, role/active toggles)
+- ✅ **Phase 2.2** — TIP Library (`library_documents` table, upload/approve/reject/delete, Claude auto-category, text extraction, few-shot injection, `LibraryPage.tsx`, RAG-ready schema)
+- ✅ **v0.5.0 / v0.5.1** — Library injection, purple badge, `library_examples_used` persisted
+- ✅ **LIVE=BLUE** (CT190, 10.92.3.91) | STANDBY=GREEN (CT191, 10.92.3.92)
 
-### Next steps (backlog)
-1. **Excel parser tuning** — validate against real discovery workbooks
-2. **RAG phase (2.4)** — pgvector embeddings for library docs (deferred until library has content)
+### Next steps
+1. **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, global doc visibility
+2. **Excel parser tuning** — validate against real discovery workbooks (backlog)
 
 ---
 

@@ -186,21 +186,14 @@ async def list_documents(
     current_user: UserModel = Depends(get_current_user),
 ):
     """
-    List all uploaded documents for the current user
+    List all uploaded documents — globally visible to all authenticated users (Phase 2.3).
     """
     from models.document import Document
-    
-    from sqlalchemy import or_
-    filters = [Document.user_id == current_user.id]
-    if current_user.id != 1:
-        filters.append(Document.user_id == 1)
     documents = db.query(Document)\
-        .filter(or_(*filters))\
-        .order_by(Document.user_id.asc(), Document.created_at.desc())\
+        .order_by(Document.created_at.desc())\
         .offset(skip)\
         .limit(limit)\
         .all()
-    
     return documents
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
@@ -210,21 +203,12 @@ async def get_document(
     current_user: UserModel = Depends(get_current_user),
 ):
     """
-    Get details of a specific document
+    Get details of a specific document — globally visible (Phase 2.3).
     """
     from models.document import Document
-    
-    from sqlalchemy import or_
-    document = db.query(Document)\
-        .filter(
-            Document.id == document_id,
-            or_(Document.user_id == current_user.id, Document.user_id == 1)
-        )\
-        .first()
-    
+    document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
     return document
 
 @router.delete("/documents/{document_id}")

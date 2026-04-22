@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, MessageSquare, Send, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const API_URL = '/api'
 
 interface Draft {
   id: number
+  user_id: number
   title: string
   status: string
   content: string | null
@@ -16,6 +18,13 @@ interface Draft {
   library_examples_used: { title: string; category: string }[] | null
   created_at: string
   generated_at: string | null
+}
+
+interface Collaborator {
+  user_id: number
+  username: string
+  full_name: string | null
+  invited_by_username: string
 }
 
 interface Gap {
@@ -280,6 +289,7 @@ function SectionEditor({
 export default function DraftViewPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
   const [draft, setDraft] = useState<Draft | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -287,6 +297,14 @@ export default function DraftViewPage() {
   const [exportingPdf, setExportingPdf] = useState(false)
   const [renamingTitle, setRenamingTitle] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+
+  // Collaborators
+  const [collabOpen, setCollabOpen] = useState(false)
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
+  const [collabLoading, setCollabLoading] = useState(false)
+  const [inviteUsername, setInviteUsername] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [collabError, setCollabError] = useState<string | null>(null)
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false)
@@ -302,7 +320,48 @@ export default function DraftViewPage() {
   const [gapsLoading, setGapsLoading] = useState(false)
 
   useEffect(() => { loadDraft() }, [id])
+  useEffect(() => {
+    if (collabOpen && id) loadCollaborators()
+  }, [collabOpen])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
+
+  const loadCollaborators = async () => {
+    if (!id) return
+    setCollabLoading(true)
+    try {
+      const res = await axios.get(`${API_URL}/generate/drafts/${id}/collaborators`)
+      setCollaborators(res.data)
+    } catch {
+      /* silently fail */
+    } finally {
+      setCollabLoading(false)
+    }
+  }
+
+  const handleInvite = async () => {
+    if (!inviteUsername.trim() || !id) return
+    setInviting(true)
+    setCollabError(null)
+    try {
+      const res = await axios.post(`${API_URL}/generate/drafts/${id}/collaborators`, { username: inviteUsername.trim() })
+      setCollaborators(prev => [...prev, res.data])
+      setInviteUsername('')
+    } catch (err: any) {
+      setCollabError(err.response?.data?.detail || 'Invite failed')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleRemoveCollab = async (userId: number) => {
+    if (!id) return
+    try {
+      await axios.delete(`${API_URL}/generate/drafts/${id}/collaborators/${userId}`)
+      setCollaborators(prev => prev.filter(c => c.user_id !== userId))
+    } catch {
+      /* silently fail */
+    }
+  }
 
   const loadGaps = async () => {
     if (!id) return
@@ -502,6 +561,16 @@ export default function DraftViewPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setCollabOpen(!collabOpen)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              collabOpen ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
+            title="Manage collaborators"
+          >
+            <Users className="w-4 h-4" />
+            {collaborators.length > 0 ? collaborators.length : ''}
+          </button>
           {draft.status === 'completed' && (
             <button
               onClick={toggleGaps}
@@ -544,6 +613,62 @@ export default function DraftViewPage() {
           </div>
         </div>
       </div>
+
+      {collabOpen && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-blue-600" />
+            <span className="font-semibold text-sm text-blue-800">Collaborators</span>
+            {collabLoading && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+          </div>
+          {collaborators.length === 0 && !collabLoading && (
+            <p className="text-xs text-blue-600 mb-3">No collaborators yet.</p>
+          )}
+          {collaborators.length > 0 && (
+            <div className="space-y-1.5 mb-3">
+              {collaborators.map(c => (
+                <div key={c.user_id} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2 border border-blue-100">
+                  <div>
+                    <span className="font-medium text-gray-800">{c.username}</span>
+                    {c.full_name && <span className="text-gray-500 ml-1">({c.full_name})</span>}
+                    <span className="text-xs text-gray-400 ml-2">invited by {c.invited_by_username}</span>
+                  </div>
+                  {currentUser && (draft.user_id === currentUser.id || currentUser.is_superuser || c.user_id === currentUser.id) && (
+                    <button
+                      onClick={() => handleRemoveCollab(c.user_id)}
+                      className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      title="Remove collaborator"
+                    >
+                      <UserMinus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {currentUser && (draft.user_id === currentUser.id || currentUser.is_superuser) && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inviteUsername}
+                onChange={e => { setInviteUsername(e.target.value); setCollabError(null) }}
+                onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                placeholder="Username to invite…"
+                className="flex-1 text-sm border border-blue-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              />
+              <button
+                onClick={handleInvite}
+                disabled={inviting || !inviteUsername.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                Invite
+              </button>
+            </div>
+          )}
+          {collabError && <p className="text-xs text-red-600 mt-2">{collabError}</p>}
+        </div>
+      )}
 
       {gapsOpen && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">

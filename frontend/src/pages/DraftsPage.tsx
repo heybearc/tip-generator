@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy, Users } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const API_URL = '/api'
 
 interface Draft {
   id: number
+  user_id: number
   title: string
   status: string
   claude_model: string | null
   generation_tokens: number | null
   generation_prompt: string | null
+  collaborator_count: number | null
   created_at: string
   generated_at: string | null
 }
@@ -34,6 +37,7 @@ function parseProgress(generation_prompt: string | null): ChunkProgress | null {
 
 export default function DraftsPage() {
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -219,10 +223,22 @@ export default function DraftsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {currentUser && draft.user_id !== currentUser.id && (
+                  <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">
+                    <Users className="w-3 h-3" />
+                    Shared
+                  </span>
+                )}
+                {draft.collaborator_count != null && draft.collaborator_count > 0 && currentUser && draft.user_id === currentUser.id && (
+                  <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">
+                    <Users className="w-3 h-3" />
+                    {draft.collaborator_count}
+                  </span>
+                )}
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass(draft.status)}`}>
                   {draft.status}
                 </span>
-                {renamingId !== draft.id && (
+                {renamingId !== draft.id && currentUser && draft.user_id === currentUser.id && (
                   <button
                     onClick={e => startRename(e, draft)}
                     className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
@@ -238,13 +254,15 @@ export default function DraftsPage() {
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={e => handleDelete(e, draft.id)}
-                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                  title="Delete draft"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {currentUser && (draft.user_id === currentUser.id || currentUser.is_superuser) && (
+                  <button
+                    onClick={e => handleDelete(e, draft.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="Delete draft"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <span className="text-xs text-gray-400">→</span>
               </div>
             </div>

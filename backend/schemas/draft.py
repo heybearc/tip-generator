@@ -27,10 +27,11 @@ class DraftResponse(BaseModel):
     generation_tokens: Optional[int] = None
     generation_prompt: Optional[str] = None
     library_examples_used: Optional[list] = None
+    collaborator_count: Optional[int] = None  # populated by endpoint, not a DB column
     created_at: datetime
     updated_at: Optional[datetime] = None
     generated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
