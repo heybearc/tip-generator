@@ -386,7 +386,8 @@ async def refine_section_guided(
 
     section_key = body.get("section_key", "")
     current_content = body.get("current_content", "")
-    mode = body.get("mode", "tighten")  # tighten | comply | risks | both
+    mode = body.get("mode", "tighten")  # tighten | comply | risks | both | custom
+    custom_instruction = (body.get("custom_instruction") or "").strip()
 
     # Resolve author name from current user
     author_name = (current_user.full_name or current_user.username) if current_user else "Thrive"
@@ -488,7 +489,12 @@ async def refine_section_guided(
         ),
     }
 
-    mode_instruction = mode_prompts.get(mode, mode_prompts["tighten"])
+    if mode == "custom":
+        if not custom_instruction:
+            raise HTTPException(status_code=400, detail="Custom instruction is required for custom mode")
+        mode_instruction = custom_instruction
+    else:
+        mode_instruction = mode_prompts.get(mode, mode_prompts["tighten"])
 
     instruction_block = f"\nTEMPLATE INSTRUCTION FOR THIS SECTION TYPE:\n{instruction_text}\n" if instruction_text else ""
 
@@ -542,6 +548,63 @@ Rewrite this section following the rules above."""
             "instruction_used": instruction_text or "general tighten",
             "mode": mode
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
+
+
+@router.post("/drafts/{draft_id}/refine-all")
+async def refine_all_sections(
+    draft_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Apply a free-text instruction to every section of the draft and return revised sections."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    instruction = (body.get("instruction") or "").strip()
+    if not instruction:
+        raise HTTPException(status_code=400, detail="Instruction is required")
+
+    if not current_user.claude_api_key:
+        raise HTTPException(status_code=402, detail="No Claude API key configured. Add your Anthropic API key in your profile settings.")
+
+    draft = _get_draft_readable(db, draft_id, current_user)
+    if not draft.sections:
+        raise HTTPException(status_code=400, detail="Draft has no sections to refine")
+
+    import anthropic
+
+    system_prompt = (
+        "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
+        "Apply the user's instruction to the section content provided. "
+        "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
+        "Preserve all customer-specific details, IP addresses, server names, dates. "
+        "Use markdown formatting. Do not invent facts."
+    )
+
+    def _refine_section(key: str, content: str) -> tuple[str, str]:
+        client = anthropic.Anthropic(api_key=current_user.claude_api_key)
+        prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
+        msg = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1500,
+            system=system_prompt,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return key, msg.content[0].text
+
+    try:
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            tasks = [
+                loop.run_in_executor(pool, _refine_section, k, v)
+                for k, v in draft.sections.items()
+                if v and v.strip()
+            ]
+            results = await asyncio.gather(*tasks)
+        return {"sections": dict(results), "instruction": instruction}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 

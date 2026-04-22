@@ -84,6 +84,7 @@ const REFINE_MODES = [
   { value: 'comply',  label: 'Apply Template', description: 'Restructure to match template instructions' },
   { value: 'risks',   label: 'Fix Risks Format', description: 'Reformat risks into 4-field structure' },
   { value: 'both',    label: 'Tighten + Apply', description: 'Condense AND apply template structure' },
+  { value: 'custom',  label: 'Custom', description: 'Free-text instruction' },
 ]
 
 function SectionEditor({
@@ -105,6 +106,7 @@ function SectionEditor({
   const [saving, setSaving] = useState(false)
   const [refineOpen, setRefineOpen] = useState(false)
   const [refineMode, setRefineMode] = useState('tighten')
+  const [refineCustomText, setRefineCustomText] = useState('')
   const [refining, setRefining] = useState(false)
   const [refinedPreview, setRefinedPreview] = useState<string | null>(null)
   const [refineInstruction, setRefineInstruction] = useState<string | null>(null)
@@ -124,6 +126,7 @@ function SectionEditor({
         section_key: sectionKey,
         current_content: value || content,
         mode: refineMode,
+        custom_instruction: refineMode === 'custom' ? refineCustomText : undefined,
       })
       setRefinedPreview(res.data.suggestion)
       setRefineInstruction(res.data.instruction_used)
@@ -229,15 +232,37 @@ function SectionEditor({
                 {m.label}
               </button>
             ))}
-            <button
-              onClick={handleRefine}
-              disabled={refining}
-              className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              {refining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {refining ? 'Refining…' : 'Run'}
-            </button>
+            {refineMode !== 'custom' && (
+              <button
+                onClick={handleRefine}
+                disabled={refining}
+                className="ml-auto flex items-center gap-1 text-xs px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {refining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {refining ? 'Refining…' : 'Run'}
+              </button>
+            )}
           </div>
+          {refineMode === 'custom' && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={refineCustomText}
+                onChange={e => setRefineCustomText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !refining && refineCustomText.trim() && handleRefine()}
+                placeholder="e.g. Convert bullets to numbered steps, remove the 3rd paragraph…"
+                className="flex-1 text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              />
+              <button
+                onClick={handleRefine}
+                disabled={refining || !refineCustomText.trim()}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {refining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {refining ? 'Refining…' : 'Run'}
+              </button>
+            </div>
+          )}
           {refinedPreview && (
             <div className="mt-2">
               <div className="flex items-center justify-between mb-1">
@@ -278,6 +303,102 @@ function SectionEditor({
           ) : (
             <div className="prose-tip">
               {content.split('\n').map((line, i) => renderLine(line, i))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DocRefinePanel({ draftId, onApplyAll }: { draftId: number; onApplyAll: (sections: Record<string, string>) => void }) {
+  const [open, setOpen] = useState(false)
+  const [instruction, setInstruction] = useState('')
+  const [running, setRunning] = useState(false)
+  const [preview, setPreview] = useState<Record<string, string> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
+
+  const handleRun = async () => {
+    if (!instruction.trim()) return
+    setRunning(true)
+    setPreview(null)
+    setError(null)
+    setApplied(false)
+    try {
+      const res = await axios.post(`${API_URL}/generate/drafts/${draftId}/refine-all`, { instruction })
+      setPreview(res.data.sections)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Refinement failed. Please try again.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const handleApply = () => {
+    if (preview) {
+      onApplyAll(preview)
+      setApplied(true)
+      setPreview(null)
+      setInstruction('')
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border shadow-sm mb-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-xl"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-500" />
+          Whole-Document Refine
+        </div>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 border-t pt-3 space-y-3">
+          <p className="text-xs text-gray-500">Apply a single instruction to every section simultaneously. Claude processes all sections in parallel.</p>
+          <div className="flex gap-2">
+            <textarea
+              value={instruction}
+              onChange={e => setInstruction(e.target.value)}
+              placeholder="e.g. Convert all bullet lists to numbered steps&#10;Standardize all headings to sentence case&#10;Remove all [DATA NEEDED] placeholders and replace with TBD"
+              rows={3}
+              className="flex-1 text-sm border rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRun}
+              disabled={running || !instruction.trim()}
+              className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+            >
+              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {running ? `Refining all sections…` : 'Run on All Sections'}
+            </button>
+            {preview && (
+              <button
+                onClick={handleApply}
+                className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Apply All ({Object.keys(preview).length} sections)
+              </button>
+            )}
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          {applied && <p className="text-xs text-green-600">✓ All sections updated. Review and save each section.</p>}
+          {preview && (
+            <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+              <p className="text-xs font-semibold text-gray-600 mb-2">Preview — {Object.keys(preview).length} sections revised:</p>
+              {Object.entries(preview).map(([key, val]) => (
+                <div key={key} className="text-xs border-b pb-2 last:border-0">
+                  <p className="font-medium text-gray-700 mb-1">{key}</p>
+                  <p className="text-gray-500 line-clamp-2 whitespace-pre-line">{val}</p>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -433,6 +554,20 @@ export default function DraftViewPage() {
     } finally {
       setRenamingTitle(false)
     }
+  }
+
+  const handleApplyAllSections = async (sections: Record<string, string>) => {
+    if (!draft) return
+    for (const [key, content] of Object.entries(sections)) {
+      await axios.patch(
+        `${API_URL}/generate/drafts/${draft.id}/sections/section`,
+        { key, content }
+      )
+    }
+    setDraft(prev => prev ? {
+      ...prev,
+      sections: { ...(prev.sections || {}), ...sections }
+    } : prev)
   }
 
   const handleSaveSection = async (sectionKey: string, content: string) => {
@@ -739,6 +874,9 @@ export default function DraftViewPage() {
       <div className={`grid gap-4 ${chatOpen ? 'grid-cols-3' : 'grid-cols-1'}`}>
         {/* Sections */}
         <div className={`${chatOpen ? 'col-span-2' : 'col-span-1'} max-h-[78vh] overflow-y-auto pr-1`}>
+          {sectionEntries.length > 0 && (
+            <DocRefinePanel draftId={draft.id} onApplyAll={handleApplyAllSections} />
+          )}
           {sectionEntries.length > 0 ? (
             sectionEntries.map(([key, value]) => (
               <SectionEditor
