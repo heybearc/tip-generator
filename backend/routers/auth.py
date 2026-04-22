@@ -29,8 +29,16 @@ JWT_EXPIRY_MINUTES  = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
 
 def _base_url(request: Request) -> str:
     """Derive scheme+host from the incoming request (works for any domain)."""
-    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    scheme = (
+        request.headers.get("x-forwarded-proto")
+        or request.headers.get("x-forwarded-scheme")
+        or request.url.scheme
+    )
     host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    # NPM proxies to backend over plain HTTP, so forwarded-proto may arrive as http
+    # even on HTTPS domains. Force https for any non-localhost host.
+    if scheme == "http" and host and not host.startswith("localhost") and not host.startswith("127.") and ":" not in host:
+        scheme = "https"
     return f"{scheme}://{host}"
 
 # Authentik OIDC endpoints (app-specific slug)
