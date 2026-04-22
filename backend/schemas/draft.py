@@ -26,6 +26,7 @@ class DraftResponse(BaseModel):
     claude_model: Optional[str] = None
     generation_tokens: Optional[int] = None
     generation_prompt: Optional[str] = None
+    library_examples_used: Optional[list] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     generated_at: Optional[datetime] = None

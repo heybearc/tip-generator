@@ -126,6 +126,13 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
         except Exception as e:
             print(f"[generate_tip_task] library fetch skipped: {e}")
 
+        print(f"[generate_tip_task] library_examples injected: {len(library_examples)} (titles: {[e['title'] for e in library_examples]})")
+
+        # Persist which examples were injected for UI display
+        if library_examples:
+            draft.library_examples_used = [{"title": e["title"], "category": e["category"]} for e in library_examples]
+            db.commit()
+
         claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
         updated_draft = asyncio.run(
             claude.generate_tip(

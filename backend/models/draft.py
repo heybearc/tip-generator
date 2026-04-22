@@ -38,6 +38,7 @@ class Draft(Base):
     generation_prompt = Column(Text, nullable=True)
     generation_tokens = Column(Integer, nullable=True)
     celery_task_id = Column(String, nullable=True)
+    library_examples_used = Column(JSON, nullable=True)  # [{title, category}] injected at generation time
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

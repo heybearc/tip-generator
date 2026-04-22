@@ -13,6 +13,7 @@ interface Draft {
   sections: Record<string, string> | null
   claude_model: string | null
   generation_tokens: number | null
+  library_examples_used: { title: string; category: string }[] | null
   created_at: string
   generated_at: string | null
 }
@@ -481,6 +482,15 @@ export default function DraftViewPage() {
               {draft.claude_model && <span>{draft.claude_model}</span>}
               {draft.generation_tokens && <span>{draft.generation_tokens.toLocaleString()} tokens</span>}
               {sectionEntries.length > 0 && <span>{sectionEntries.length} sections</span>}
+              {draft.library_examples_used && draft.library_examples_used.length > 0 && (
+                <span
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium cursor-default"
+                  title={`Library examples used: ${draft.library_examples_used.map(e => e.title).join(', ')}`}
+                >
+                  <BookOpen className="w-3 h-3" />
+                  {draft.library_examples_used.length} library example{draft.library_examples_used.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
           </div>
         </div>
