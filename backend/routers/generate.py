@@ -559,9 +559,14 @@ async def refine_all_sections(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
-    """Apply a free-text instruction to every section of the draft and return revised sections."""
+    """Apply a free-text instruction to every section of the draft and return revised sections.
+
+    Uses the Anthropic Batch API (50% token discount) with prompt caching on the system prompt.
+    Falls back to parallel individual calls if the batch times out.
+    """
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
+    from services.claude import ClaudeService
 
     instruction = (body.get("instruction") or "").strip()
     if not instruction:
@@ -574,37 +579,55 @@ async def refine_all_sections(
     if not draft.sections:
         raise HTTPException(status_code=400, detail="Draft has no sections to refine")
 
-    import anthropic
-
-    system_prompt = (
-        "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
-        "Apply the user's instruction to the section content provided. "
-        "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
-        "Preserve all customer-specific details, IP addresses, server names, dates. "
-        "Use markdown formatting. Do not invent facts."
-    )
-
-    def _refine_section(key: str, content: str) -> tuple[str, str]:
-        client = anthropic.Anthropic(api_key=current_user.claude_api_key)
-        prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
-        msg = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return key, msg.content[0].text
-
     try:
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            tasks = [
-                loop.run_in_executor(pool, _refine_section, k, v)
-                for k, v in draft.sections.items()
-                if v and v.strip()
+        claude = ClaudeService(api_key=current_user.claude_api_key)
+        try:
+            sections = await claude.batch_refine_all_sections(
+                sections=draft.sections,
+                instruction=instruction,
+                poll_interval=3,
+                timeout=270,
+            )
+        except (TimeoutError, Exception):
+            # Fallback: parallel individual calls with caching
+            import anthropic as _anthropic
+
+            REFINE_SYSTEM = [
+                {
+                    "type": "text",
+                    "text": (
+                        "You are a senior technical writer at Thrive Networks editing a Technical Implementation Plan (TIP). "
+                        "Apply the user's instruction to the section content provided. "
+                        "Return ONLY the revised section content — no preamble, no explanation, no section heading. "
+                        "Preserve all customer-specific details, IP addresses, server names, dates. "
+                        "Use markdown formatting. Do not invent facts."
+                    ),
+                    "cache_control": {"type": "ephemeral"},
+                }
             ]
-            results = await asyncio.gather(*tasks)
-        return {"sections": dict(results), "instruction": instruction}
+
+            def _refine_section(key: str, content: str) -> tuple[str, str]:
+                client = _anthropic.Anthropic(api_key=current_user.claude_api_key)
+                prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
+                msg = client.messages.create(
+                    model=claude.model,
+                    max_tokens=1500,
+                    system=REFINE_SYSTEM,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return key, msg.content[0].text
+
+            loop = asyncio.get_event_loop()
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                tasks = [
+                    loop.run_in_executor(pool, _refine_section, k, v)
+                    for k, v in draft.sections.items()
+                    if v and v.strip()
+                ]
+                results = await asyncio.gather(*tasks)
+            sections = dict(results)
+
+        return {"sections": sections, "instruction": instruction}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 
@@ -626,8 +649,13 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), curren
 
     import os
 
-    # Start from the actual template so heading styles are inherited correctly
-    template_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'Thrive_TIP_Template.docx'))
+    # Resolve base template: prefer active DB template path, fallback to static file
+    _active_tpl = db.query(TemplateFile).filter(TemplateFile.is_active == True).first()
+    template_path = (
+        _active_tpl.file_path
+        if _active_tpl and _active_tpl.file_path and os.path.exists(_active_tpl.file_path)
+        else os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'Thrive_TIP_Template.docx'))
+    )
     if os.path.exists(template_path):
         doc = DocxDocument(template_path)
         # Clear all body content from template — keep styles/header/footer
