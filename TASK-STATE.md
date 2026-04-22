@@ -1,38 +1,37 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22  
+**Last updated:** 2026-04-22 (mid-day)  
 **Current branch:** main  
-**Working on:** Phase 1.9 — Draft management + gap report complete, deployed to both containers
+**Working on:** v0.4.0 bumped + test suite fixed; ready for /release
 
 ---
 
 ## Current Task
-**Phase 1.9 Draft Management + Gap Report — COMPLETE**
-
-Draft duplicate and gap/suggestion report shipped to both blue and green containers.
+**v0.4.0 Release Prep — TESTS PASSING, READY FOR /release**
 
 ### Recent completions (April 22, 2026)
-- ✅ **Draft duplicate** — `POST /api/generate/drafts/{id}/duplicate` backend endpoint
-- ✅ **Gap report endpoint** — `GET /api/generate/drafts/{id}/gaps` scans `[DATA NEEDED: ...]` placeholders
-- ✅ **DraftsPage UI** — Copy icon button added to draft row (duplicates immediately, inserts at top)
-- ✅ **DraftViewPage UI** — "Gaps" button in header opens amber collapsible panel with numbered gap list
-- ✅ **Both containers deployed** — tip-blue (CT190) and tip-green (CT191) on latest main
+- ✅ **v0.4.0 bumped** — retroactive bump for Phase 1.9 (draft duplicate + gap report)
+- ✅ **Test suite fixed** — `global-setup` auth flow repaired; `documents.spec` selector fixed
+- ✅ **26/28 tests passing** — 2 skipped (data-dependent, acceptable)
+- ✅ **Both containers on latest main** — D-LOCAL-010 violation; both LIVE and STANDBY identical
 
 ### Next steps
-1. **BYOK Claude API key** — user profile field for personal Claude API key
-2. **Excel parser tuning** — validate against real discovery workbooks
+1. **`/release`** — switch traffic (optional; both containers identical so not urgent)
+2. **BYOK Claude API key** — user profile field for personal Claude API key
+3. **Excel parser tuning** — validate against real discovery workbooks
 
 ---
 
 ## Known Issues
-- ℹ️ **2 Playwright tests skipped** — documents and drafts specs have skipped tests (not failures); acceptable for now.
+- ℹ️ **2 Playwright tests skipped** — data-dependent (require existing drafts); acceptable for now.
+- ℹ️ **Tests run against LIVE only** — Authentik redirect_uri only registered for `tip.cloudigan.net`; green-tip cannot complete OAuth. See D-LOCAL-011.
 
 ---
 
 ## Exact Next Command
 ```
-# Test gap report on a real draft
-curl -si https://blue-tip.cloudigan.net/api/generate/drafts/{id}/gaps
+# Run /release to switch traffic (both containers identical, low risk)
+# Or move to next feature: BYOK Claude API key
 ```
 
 ---

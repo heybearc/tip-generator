@@ -103,6 +103,12 @@ When adding a decision, use this format:
 - **Correction:** Both containers are currently on the same code so no rollback is needed. Future deployments must stop at STANDBY and wait for explicit release approval.
 - **When:** 2026-04-22
 
+## D-LOCAL-011: Playwright tests must target LIVE (blue-tip.cloudigan.net)
+- **Decision:** E2E tests always run against LIVE (`blue-tip.cloudigan.net`), not STANDBY, because Authentik's OAuth redirect_uri is registered for `tip.cloudigan.net` only. Green/standby cannot complete the OAuth callback flow.
+- **Why:** Adding `green-tip.cloudigan.net` as an allowed redirect in Authentik is a valid future improvement, but for now LIVE tests are safe since D-LOCAL-010 established both containers are kept in sync. The `global-setup` fix (URL predicate vs regex) ensures `tip_session` cookie is captured before auth-state.json is saved.
+- **When:** 2026-04-22
+- **Future action:** Register `green-tip.cloudigan.net/api/auth/callback` in Authentik OIDC provider to enable true STANDBY testing
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.
