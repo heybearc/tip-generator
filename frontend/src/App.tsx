@@ -42,6 +42,7 @@ import GenerateTipPage from './pages/help/GenerateTipPage'
 import ManageDraftsPage from './pages/help/ManageDraftsPage'
 import TemplateManagementHelpPage from './pages/help/TemplateManagementPage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import LibraryPage from './pages/LibraryPage'
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
         <Route path="/release-notes" element={<ReleaseNotesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+        <Route path="/library" element={<LibraryPage />} />
             </Routes>
           </Layout>
         </ProtectedRoute>
