@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-22  
-**Current phase:** Phase 1.9 — Draft management, gap report  
-**Status:** Phases 1.1–1.8 complete; 1.9 in progress
+**Current phase:** Phase 2 — BYOK + Admin  
+**Status:** v0.5.0 released; BYOK complete
 
 ---
 
@@ -18,7 +18,9 @@
 ### Active Work (IN PROGRESS)
 - ✅ Draft duplicate — `POST /api/generate/drafts/{id}/duplicate`
 - ✅ Gap/suggestion report — `GET /api/generate/drafts/{id}/gaps` + Gaps panel in DraftViewPage
-- ⏳ Next: BYOK Claude API key or Admin dashboard
+- ✅ BYOK Claude API key — per-user key, no fallback, dynamic model selector
+- ✅ Dynamic OAuth redirect — `_base_url(request)` replaces hardcoded env vars
+- ⏳ Next: Admin dashboard or Excel parser tuning
 
 ---
 
@@ -115,7 +117,7 @@
 - ~~**Draft management** — delete drafts, rename, duplicate~~ ✅ all three complete
 - ~~**Gap/suggestion report**~~ ✅ implemented (`GET /drafts/{id}/gaps` + Gaps panel)
 - **Generation history** — track which documents/template version produced each draft
-- **BYOK Claude API key** — user profile field for personal Claude API key; generation uses it if set, falls back to system key
+- ~~**BYOK Claude API key**~~ ✅ complete — no fallback; dynamic model selector
 - **Admin dashboard** — user management UI, usage/cost stats, API key status per user
 - **Template Claude instructions** — add `[CLAUDE: ...]` markers to actual template .docx and verify they're picked up
 - **Prompt quality iteration** — review first real TIP output and refine prompts

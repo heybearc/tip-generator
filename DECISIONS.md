@@ -109,6 +109,16 @@ When adding a decision, use this format:
 - **Why:** Testing STANDBY validates new code before it goes LIVE. All three redirect URIs are registered in Authentik (`tip.cloudigan.net`, `blue-tip.cloudigan.net`, `green-tip.cloudigan.net`), so OAuth works on either node.
 - **When:** 2026-04-22
 
+## D-LOCAL-012: BYOK — no system API key fallback
+- **Decision:** Each user must provide their own Anthropic Claude API key. No system-level fallback. Generation fails with HTTP 402 + clear message if key not set.
+- **Why:** Cost isolation — users pay for their own usage directly.
+- **When:** 2026-04-22
+
+## D-LOCAL-013: OAuth redirect_uri derived dynamically from request host
+- **Decision:** `OAUTH_REDIRECT_URI` and `FRONTEND_URL` are no longer read from `.env`. Both are derived at runtime from the incoming request's `x-forwarded-host` / `host` headers via `_base_url(request)`.
+- **Why:** Eliminates the need to mutate `.env` files when testing against non-LIVE domains (blue-tip, green-tip). All three Authentik redirect URIs are pre-registered.
+- **When:** 2026-04-22
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.

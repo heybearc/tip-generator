@@ -1,39 +1,41 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (mid-day, post-release)  
+**Last updated:** 2026-04-22 (mid-day, post-v0.5.0 release)  
 **Current branch:** main  
-**Working on:** v0.4.0 released — next: BYOK Claude API key
+**Working on:** v0.5.0 released — next: Admin dashboard or Excel parser tuning
 
 ---
 
 ## Current Task
-**v0.4.0 RELEASED — Starting BYOK Claude API key feature**
+**v0.5.0 RELEASED — BYOK + model chooser complete**
 
 ### Recent completions (April 22, 2026)
-- ✅ **v0.4.0 bumped** — retroactive bump for Phase 1.9 (draft duplicate + gap report)
-- ✅ **Test suite fixed** — `global-setup` auth flow repaired; `documents.spec` selector fixed
-- ✅ **26/28 tests passing** — 2 skipped (data-dependent, acceptable)
-- ✅ **v0.4.0 deployed** — BLUE (LIVE), GREEN (STANDBY) both on v0.4.0; traffic on BLUE
-- ✅ **`/release` + `/sync` complete** — both containers synced
+- ✅ **BYOK Claude API key** — `claude_api_key` per user, no system fallback; generation fails clearly if not set
+- ✅ **Dynamic model selector** — `/api/auth/profile/models` fetches live from Anthropic; saved per user
+- ✅ **Profile page** — `/profile` with nav link; save/replace/remove key + model radio selector
+- ✅ **Dynamic OAuth redirect** — `_base_url(request)` replaces hardcoded `OAUTH_REDIRECT_URI`/`FRONTEND_URL`; no more `.env` changes for testing
+- ✅ **Test infra fixed** — STANDBY auth works; `waitForURL` timeout 45s; `qa-01/.env.test` targets STANDBY
+- ✅ **v0.5.0 released** — GREEN is now LIVE; BLUE synced
 
 ### Next steps
-1. **BYOK Claude API key** — user profile field for personal Claude API key; falls back to system key
+1. **Admin dashboard** — user mgmt, usage/cost stats
 2. **Excel parser tuning** — validate against real discovery workbooks
-3. **Admin dashboard** — user mgmt, usage/cost stats
+3. **Prompt quality iteration** — review first real TIP and refine
 
 ---
 
 ## Known Issues
 - ℹ️ **2 Playwright tests skipped** — data-dependent (require existing drafts); acceptable for now.
 - ℹ️ **Tests run against STANDBY** — new features deploy to STANDBY first; tests validate before `/release`. All three Authentik redirect URIs registered. See D-LOCAL-011.
+- ℹ️ **Next test cycle** — update `qa-01:/opt/tests/tip-generator/.env.test` BASE_URL to point at STANDBY node before running `/test-release`. No container `.env` changes needed (dynamic OAuth redirect).
 
 ---
 
 ## Exact Next Command
 ```
-# Start BYOK feature: add claude_api_key field to user profile
-# Backend: PATCH /api/users/me/profile, store encrypted in DB
-# Frontend: Profile settings page with API key input
+# Next: admin dashboard or excel parser tuning
+# Admin dashboard: user list, deactivate, claude_api_key status
+# Excel parser: test against real discovery workbook
 ```
 
 ---
@@ -46,4 +48,5 @@
 - Auth: Authentik at auth.cloudigan.net, OIDC client `MFO9C9ynlvpoX895YRSutwCl7xBouyAy4oOjNmI9`
 - E2E tests: qa-01 `/opt/tests/tip-generator/` — run with `npx playwright test`
 - Deploy: `ssh tip-blue 'cd /opt/tip-generator && git pull && /opt/tip-generator/deploy.sh'`
-- Current LIVE: BLUE (CT190, 10.92.3.91) — after /release on 2026-04-22
+- Current LIVE: GREEN (CT191, 10.92.3.92) — after v0.5.0 /release on 2026-04-22
+- OAuth redirect_uri and frontend_url now derived dynamically from request host (no .env dependency)
