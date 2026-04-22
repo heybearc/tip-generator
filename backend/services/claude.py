@@ -46,7 +46,8 @@ class ClaudeService:
         discovery_doc: Optional[Document],
         service_order_doc: Optional[Document],
         db: Session,
-        template_structure: Optional[Dict[str, Any]] = None
+        template_structure: Optional[Dict[str, Any]] = None,
+        library_examples: Optional[List[Dict[str, str]]] = None,
     ) -> Draft:
         """
         Generate TIP using Claude API.
@@ -75,11 +76,13 @@ class ClaudeService:
                 })
                 db.commit()
                 generated_content, total_tokens = await self._generate_chunked(
-                    draft, discovery_doc, service_order_doc, template_structure, db
+                    draft, discovery_doc, service_order_doc, template_structure, db,
+                    library_examples=library_examples,
                 )
             else:
                 prompt = self._build_prompt(
-                    draft, discovery_doc, service_order_doc, template_structure
+                    draft, discovery_doc, service_order_doc, template_structure,
+                    library_examples=library_examples,
                 )
                 draft.generation_prompt = f"[SINGLE PASS: {doc_size} chars]"
                 db.commit()
@@ -129,7 +132,8 @@ class ClaudeService:
         discovery_doc: Optional[Document],
         service_order_doc: Optional[Document],
         template_structure: Dict[str, Any],
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        library_examples: Optional[List[Dict[str, str]]] = None,
     ) -> tuple:
         """
         Generate TIP section by section when documents are large.
@@ -179,7 +183,8 @@ class ClaudeService:
                 sections_chunk=chunk,
                 instruction_map=instruction_map,
                 chunk_index=chunk_idx,
-                total_chunks=total_chunks
+                total_chunks=total_chunks,
+                library_examples=library_examples,
             )
 
             response = self.client.messages.create(
@@ -201,7 +206,8 @@ class ClaudeService:
         sections_chunk: List[Dict],
         instruction_map: Dict[str, List[str]],
         chunk_index: int,
-        total_chunks: int
+        total_chunks: int,
+        library_examples: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Build a prompt for a single chunk of template sections.
@@ -252,6 +258,9 @@ class ClaudeService:
         if draft.description:
             parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
 
+        if library_examples:
+            parts.append(self._build_examples_block(library_examples))
+
         parts.append("=== SECTIONS TO GENERATE NOW ===\n\n")
 
         for section in sections_chunk:
@@ -277,12 +286,43 @@ class ClaudeService:
 
         return "".join(parts)
 
+    def _build_examples_block(
+        self,
+        examples: List[Dict[str, str]],
+        max_chars_per_example: int = 8000,
+    ) -> str:
+        """
+        Build a few-shot reference block from approved library TIPs.
+        Caps each example to max_chars_per_example to protect context budget.
+        examples: list of {"title": str, "category": str, "text": str}
+        """
+        if not examples:
+            return ""
+        parts = [
+            "=== REFERENCE EXAMPLES ===\n"
+            "The following are approved, real-world TIPs from the library. "
+            "Use them as style and structure references ONLY — "
+            "do NOT copy their content, client names, or specific data.\n\n"
+        ]
+        for i, ex in enumerate(examples, 1):
+            title = ex.get("title", f"Example {i}")
+            category = ex.get("category", "")
+            text = ex.get("text", "")
+            if len(text) > max_chars_per_example:
+                text = text[:max_chars_per_example] + "\n[...truncated for brevity...]"
+            parts.append(f"--- Reference TIP {i}: {title} ({category}) ---\n")
+            parts.append(text.strip())
+            parts.append("\n\n")
+        parts.append("=== END REFERENCE EXAMPLES ===\n\n")
+        return "".join(parts)
+
     def _build_prompt(
         self,
         draft: Draft,
         discovery_doc: Optional[Document],
         service_order_doc: Optional[Document],
-        template_structure: Optional[Dict[str, Any]] = None
+        template_structure: Optional[Dict[str, Any]] = None,
+        library_examples: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Build a template-aware prompt for Claude.
@@ -321,6 +361,9 @@ class ClaudeService:
                 "NOTE: No source documents were provided. Generate a TIP structure "
                 "with placeholder text indicating where real data should be inserted.\n\n"
             )
+
+        if library_examples:
+            parts.append(self._build_examples_block(library_examples))
 
         # ── Template-guided instructions ─────────────────────────────────────
         if template_structure and template_structure.get("sections"):

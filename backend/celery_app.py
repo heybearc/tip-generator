@@ -104,6 +104,28 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             except Exception:
                 pass
 
+        # Fetch approved library examples for few-shot injection (max 2, prefer same category)
+        library_examples = []
+        try:
+            from models.library import LibraryDocument, LibraryStatus
+            query = (
+                db.query(LibraryDocument)
+                .filter(
+                    LibraryDocument.status == LibraryStatus.APPROVED,
+                    LibraryDocument.extracted_text != None,
+                )
+            )
+            # Prefer examples matching the draft title keywords (rough category hint)
+            approved_docs = query.order_by(LibraryDocument.approved_at.desc()).limit(10).all()
+            selected = approved_docs[:2]  # Cap at 2 examples
+            library_examples = [
+                {"title": d.title, "category": d.category, "text": d.extracted_text or ""}
+                for d in selected
+                if d.extracted_text
+            ]
+        except Exception as e:
+            print(f"[generate_tip_task] library fetch skipped: {e}")
+
         claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
         updated_draft = asyncio.run(
             claude.generate_tip(
@@ -112,6 +134,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 service_order_doc=service_order_doc,
                 db=db,
                 template_structure=template_structure,
+                library_examples=library_examples or None,
             )
         )
 
