@@ -103,11 +103,6 @@ When adding a decision, use this format:
 - **Correction:** Both containers are currently on the same code so no rollback is needed. Future deployments must stop at STANDBY and wait for explicit release approval.
 - **When:** 2026-04-22
 
-## D-LOCAL-012: MCP deploy_to_standby incompatible with TIP Generator
-- **Decision:** Do not use `mcp0_deploy_to_standby` for TIP Generator. Use manual SSH deploy instead.
-- **Why:** MCP deploy script assumes a root `package.json` (`npm install` at `/opt/tip-generator/`). TIP Generator is FastAPI + Vite — backend is Python, frontend is in `frontend/`. No root package.json exists.
-- **Manual deploy:** `ssh tip-blue 'cd /opt/tip-generator && git pull && bash deploy.sh'`
-- **When:** 2026-04-22
 
 ## D-LOCAL-011: Playwright tests must target LIVE (blue-tip.cloudigan.net)
 - **Decision:** E2E tests always run against LIVE (`blue-tip.cloudigan.net`), not STANDBY, because Authentik's OAuth redirect_uri is registered for `tip.cloudigan.net` only. Green/standby cannot complete the OAuth callback flow.

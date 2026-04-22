@@ -46,5 +46,4 @@
 - Auth: Authentik at auth.cloudigan.net, OIDC client `MFO9C9ynlvpoX895YRSutwCl7xBouyAy4oOjNmI9`
 - E2E tests: qa-01 `/opt/tests/tip-generator/` — run with `npx playwright test`
 - Deploy: `ssh tip-blue 'cd /opt/tip-generator && git pull && /opt/tip-generator/deploy.sh'`
-- MCP `deploy_to_standby` is INCOMPATIBLE — app has no root `package.json` (FastAPI+Vite); use manual SSH deploy (see D-LOCAL-012)
 - Current LIVE: BLUE (CT190, 10.92.3.91) — after /release on 2026-04-22
