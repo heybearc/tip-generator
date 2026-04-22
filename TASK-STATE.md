@@ -19,26 +19,20 @@ Draft duplicate and gap/suggestion report shipped to both blue and green contain
 - ✅ **Both containers deployed** — tip-blue (CT190) and tip-green (CT191) on latest main
 
 ### Next steps
-1. **Add `https://tip.cloudigan.net/api/auth/callback` to Authentik** (manual — still pending)
-2. **BYOK Claude API key** — user profile field for personal Claude API key
-3. **Excel parser tuning** — validate against real discovery workbooks
+1. **BYOK Claude API key** — user profile field for personal Claude API key
+2. **Excel parser tuning** — validate against real discovery workbooks
 
 ---
 
 ## Known Issues
-- ⚠️ **Authentik redirect URI not registered for production** — must be added to Authentik → TIP Generator Provider → Redirect URIs before production login works
 - ℹ️ **2 Playwright tests skipped** — documents and drafts specs have skipped tests (not failures); acceptable for now.
 
 ---
 
 ## Exact Next Command
 ```
-# 1. Add Authentik redirect URI (manual — Authentik admin UI)
-#    https://auth.cloudigan.net → Applications → TIP Generator → Provider → Redirect URIs
-#    Add: https://tip.cloudigan.net/api/auth/callback
-
-# 2. Test gap report on a real draft
-#    curl -si https://blue-tip.cloudigan.net/api/generate/drafts/{id}/gaps
+# Test gap report on a real draft
+curl -si https://blue-tip.cloudigan.net/api/generate/drafts/{id}/gaps
 ```
 
 ---

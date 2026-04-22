@@ -107,7 +107,7 @@
 ## Prioritized Backlog
 
 ### High Priority
-- **Add production Authentik redirect URI** — `https://tip.cloudigan.net/api/auth/callback` must be registered in Authentik provider (5 min task)
+- ~~**Add production Authentik redirect URI**~~ — ✅ `https://tip.cloudigan.net/api/auth/callback` registered in Authentik provider
 - ~~**PDF export**~~ — ✅ implemented (`/drafts/{id}/export/pdf`, LibreOffice headless)
 - **Excel parser tuning** — validate against real discovery workbooks; merged cells ✅ handled; remaining: dropdowns, nested tables, edge cases
 
