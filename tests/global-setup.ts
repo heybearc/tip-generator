@@ -43,13 +43,12 @@ async function globalSetup(config: FullConfig) {
 
   // Now that the user is authenticated, re-trigger our login endpoint —
   // Authentik will issue the code immediately and redirect to our callback.
-  // NOTE: Authentik redirect_uri is registered for tip.cloudigan.net (LIVE) only.
-  // Tests must run against LIVE (blue-tip.cloudigan.net) for auth to complete.
+  // All three redirect URIs are registered in Authentik; tests target STANDBY.
   await page.goto(`${baseURL}/api/auth/login`)
   // Wait until we land on the app (not Authentik, not the auth callback)
   await page.waitForURL(
     url => !url.href.includes('auth.cloudigan.net') && !url.href.includes('/api/auth'),
-    { timeout: 20000 }
+    { timeout: 45000 }
   )
 
   await ctx.storageState({ path: 'auth-state.json' })
