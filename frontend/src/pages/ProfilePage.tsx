@@ -183,6 +183,59 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {profile?.has_claude_api_key && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Claude Model</h2>
+            </div>
+            <button
+              onClick={fetchModels}
+              disabled={loadingModels}
+              className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingModels ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+          <p className="text-sm text-gray-600">Select the model used for TIP generation and AI Assist.</p>
+          {models.length > 0 ? (
+            <div className="space-y-2">
+              {models.map(m => (
+                <label key={m.id} className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
+                  selectedModel === m.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="claude_model"
+                    value={m.id}
+                    checked={selectedModel === m.id}
+                    onChange={() => handleSaveModel(m.id)}
+                    className="text-blue-600"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{m.display_name}</div>
+                    <div className="text-xs text-gray-500">{m.id}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          ) : loadingModels ? (
+            <div className="text-sm text-gray-500 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" /> Loading models…
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">No models loaded. Click Refresh to fetch from Anthropic.</div>
+          )}
+          {!selectedModel && models.length > 0 && (
+            <p className="text-xs text-amber-600">No model selected — generation will use the server default (claude-sonnet-4-5).</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
