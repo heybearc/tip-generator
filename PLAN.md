@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-23  
-**Current phase:** Phase 2.5 — RAG / Section-Chunk Playbook  
-**Status:** Phases 2.1–2.4 complete; few-shot scoring + Excel parser tuned; planning 2.5
+**Current phase:** Security / Phase 3 prep  
+**Status:** Phases 2.1–2.5 complete; security review open; Phase 3 gated on security decision
 
 ---
 
@@ -26,7 +26,8 @@
 - ✅ **Phase 2.4: Multi-doc context injection** — validated with 4 docs, 40-page output confirmed correct
 - ✅ **Few-shot scoring** — keyword overlap scoring replaces blind recency selection; scores logged
 - ✅ **Excel parser tuning** — dropdown extraction, table advance bug fix, KV threshold relaxed
-- ⏳ **Phase 2.5: Section-chunk playbook (RAG)** — pgvector, chunk-level library, section injection
+- ✅ **Phase 2.5: Section-chunk playbook (RAG)** — pgvector + `library_chunks` table, BM25 retrieval (no external API), 193 chunks from 11 docs, injected at generation time per section
+- ⚠️ **Security: Customer data privacy** — customer data sent to Anthropic API; policy decision + implementation required (see TASK-STATE.md Security section)
 
 ---
 
@@ -118,6 +119,7 @@
 - ~~**Add production Authentik redirect URI**~~ — ✅ `https://tip.cloudigan.net/api/auth/callback` registered in Authentik provider
 - ~~**PDF export**~~ — ✅ implemented (`/drafts/{id}/export/pdf`, LibreOffice headless)
 - ~~**Excel parser tuning**~~ ✅ — dropdowns extracted, table advance fixed, KV threshold relaxed
+- ⚠️ **Security: Customer data privacy** — verify Anthropic API no-training policy; add `do_not_store` header; write `SECURITY.md` data flow doc; optionally add PII scrubbing. **Gate on before any customer-facing rollout.**
 
 ### Medium Priority
 - ~~**Draft management** — delete drafts, rename, duplicate~~ ✅ all three complete

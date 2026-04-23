@@ -1,15 +1,14 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-23 (Phase 2.4 validated; few-shot scoring + Excel parser tuned)
+**Last updated:** 2026-04-23 (Phase 2.5 RAG complete; BM25 retrieval, 193 chunks indexed)
 **Current branch:** main
-**Working on:** Phase 2.5 planning / RAG design
+**Working on:** Security — customer data privacy / Claude API data handling
 
 ---
 
 ## Current Task
-**Phase 2.4 — Multi-document context injection** — COMPLETE ✅  
-**Few-shot injection quality** — COMPLETE ✅  
-**Excel parser tuning** — COMPLETE ✅
+**Phase 2.5 — RAG / Section-Chunk Playbook** — COMPLETE ✅  
+**Security: Customer Data Privacy** — ⚠️ OPEN — needs decision + implementation
 
 ### Confirmed Complete
 - ✅ **Phase 2.1** — Admin dashboard
@@ -19,11 +18,44 @@
 - ✅ **Phase 2.4** — Multi-document context injection validated; 40-page output with 4 docs confirmed correct
 - ✅ **Few-shot scoring** — replaced blind "2 most recent" with keyword overlap scoring (draft title + discovery filename vs library title + category); scores logged at generation time
 - ✅ **Excel parser tuning** — dropdown validation extraction added (`[Options: ...]` hint in output); table row-advance bug fixed; KV threshold relaxed to 4 cells
-- ✅ **Nodes synced** — STANDBY=BLUE deployed at latest commit 2026-04-23
+- ✅ **Phase 2.5 RAG** — pgvector + `library_chunks` table; BM25 retrieval (no external API); 193 chunks indexed from 11 approved library docs; chunks injected at generation time per section; MCP deploy fixed to use venv pip
+- ✅ **STANDBY=BLUE** deployed and healthy at latest commit
 
 ### Next steps
-1. **Phase 2.5 design** — RAG / pgvector / section-chunk playbook (see PLAN.md Phase 2.5)
-2. **Update PLAN.md** — mark Phase 2.4 backlog items complete, move 2.5 to Active
+1. **⚠️ Security: Customer data privacy** — customer data (discovery worksheets, service orders) sent to Anthropic Claude API; need policy decision + implementation (see Security section below)
+2. **Admin UI: promote section → chunk** — allow admin to manually promote a draft section to a library chunk (Phase 2.5 backlog)
+3. **Phase 2.5 → LIVE** — test RAG injection on a real TIP generation, then `/release`
+
+---
+
+## ⚠️ Security: Customer Data Privacy
+
+**Issue:** Customer data (discovery worksheets, service orders, supplemental docs) is extracted as plain text and sent to the Anthropic Claude API at TIP generation time. This means customer infrastructure data leaves Thrive's infrastructure.
+
+**Current data flow:**
+1. Customer uploads doc → NFS mount (`/mnt/tip-uploads`) ✅ stays on-prem
+2. Extracted text → PostgreSQL `documents.extracted_text` ✅ stays on-prem
+3. At generation → extracted text sent to `api.anthropic.com` ⚠️ **leaves infrastructure**
+4. Claude returns TIP → stored in PostgreSQL ✅ stays on-prem
+
+**Anthropic's actual policy:**
+- API traffic is **not used for training** by default (Anthropic's commercial API terms)
+- Data is retained for up to **30 days** for trust & safety review, then deleted
+- Zero-retention option available via **Anthropic's Business/Enterprise tier** (`"do_not_store": true` request header)
+- Claude.ai (consumer product) ≠ Claude API — consumer product may train; API does not
+
+**Options to investigate (in order of effort):**
+1. **Verify current API tier** — check if the per-user BYOK keys are on standard or business tier; standard tier already no-training
+2. **Add `do_not_store` header** — if on eligible tier, add `X-Anthropic-Do-Not-Store: true` to all API calls (1-line change)
+3. **PII scrubbing before send** — strip customer names, IPs, domains before sending to Claude (complex, risky — may degrade output quality)
+4. **On-premise LLM** — self-hosted model (Ollama + Llama/Mistral) — eliminates third-party exposure entirely but degrades output quality significantly
+5. **Document and accept** — formally document the data flow, get customer consent at onboarding (lightest-weight)
+
+**Recommended immediate action:**
+- [ ] Verify Anthropic API tier and confirm no-training policy applies to BYOK keys
+- [ ] Add `do_not_store` header to all Claude API calls (zero-effort if eligible)
+- [ ] Add data flow disclosure to user onboarding / admin docs
+- [ ] Add a `SECURITY.md` to the repo documenting the data flow for audit trail
 
 ---
 
