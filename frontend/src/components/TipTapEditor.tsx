@@ -7,6 +7,7 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
+import TextAlign from '@tiptap/extension-text-align'
 import TurndownService from 'turndown'
 import { marked } from 'marked'
 import type { MarkedOptions } from 'marked'
@@ -14,6 +15,7 @@ import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, TableIcon, Undo2, Redo2,
   CheckSquare, Minus, ChevronDown,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
 } from 'lucide-react'
 
 // ── Structured table templates (Thrive TIP standard) ───────────────────────
@@ -104,6 +106,7 @@ export default function TipTapEditor({ value, onChange }: Props) {
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph', 'tableCell', 'tableHeader'] }),
     ],
     content: mdToHtml(value),
     onUpdate: ({ editor }) => {
@@ -184,6 +187,21 @@ export default function TipTapEditor({ value, onChange }: Props) {
         </Btn>
         <Btn onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')} title="Checklist">
           <CheckSquare className="w-4 h-4" />
+        </Btn>
+
+        <span className="w-px h-5 bg-gray-200 mx-1" />
+
+        <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Align left">
+          <AlignLeft className="w-4 h-4" />
+        </Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Align center">
+          <AlignCenter className="w-4 h-4" />
+        </Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right">
+          <AlignRight className="w-4 h-4" />
+        </Btn>
+        <Btn onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Justify">
+          <AlignJustify className="w-4 h-4" />
         </Btn>
 
         <span className="w-px h-5 bg-gray-200 mx-1" />

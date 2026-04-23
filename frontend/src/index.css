@@ -154,3 +154,30 @@
   border-color: #143F6A;
   margin: 0.75rem 0;
 }
+/* Column resize handle — visible drag target */
+.tiptap-content .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #143F6A;
+  opacity: 0;
+  cursor: col-resize;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+.tiptap-content .ProseMirror table:hover .column-resize-handle,
+.tiptap-content .ProseMirror .column-resize-handle:hover {
+  opacity: 0.4;
+}
+.tiptap-content .ProseMirror .resize-cursor {
+  cursor: col-resize;
+}
+/* Text alignment */
+.tiptap-content .ProseMirror [style*="text-align: center"],
+.tiptap-content .ProseMirror [style*="text-align:center"] { text-align: center; }
+.tiptap-content .ProseMirror [style*="text-align: right"],
+.tiptap-content .ProseMirror [style*="text-align:right"]  { text-align: right; }
+.tiptap-content .ProseMirror [style*="text-align: justify"],
+.tiptap-content .ProseMirror [style*="text-align:justify"] { text-align: justify; }
