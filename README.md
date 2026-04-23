@@ -36,6 +36,11 @@ The generated draft is editable in-browser, then exported as a fully-formatted `
 | OAuth2 / OIDC authentication | ✅ |
 | Background task queue (Celery + Redis) | ✅ |
 | Blue-green zero-downtime deployment | ✅ |
+| PII pseudonymization (Presidio, opt-in per draft) | ✅ |
+| Section order & visibility management (drag-and-drop) | ✅ |
+| Multi-pass pillar generation (all 6 pillars) | ✅ |
+| Whole-document refine with per-section preview | ✅ |
+| Isolated Celery queues per environment | ✅ |
 
 ---
 

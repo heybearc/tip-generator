@@ -43,6 +43,38 @@ export default function ManageDraftsPage() {
           ),
         },
         {
+          title: 'Managing Sections (Order & Visibility)',
+          content: (
+            <>
+              <p>Before exporting, you can control which sections appear in the final document and in what order.</p>
+              <ol className="list-decimal ml-4 space-y-2 mt-3">
+                <li>Open a completed draft and click <strong>Manage Sections</strong> near the top of the page.</li>
+                <li>Toggle sections <strong>on or off</strong> — hidden sections are excluded from the export.</li>
+                <li>Drag sections up or down to <strong>reorder</strong> them.</li>
+                <li>Click <strong>Save Order</strong> to apply. Your changes are saved to this draft permanently.</li>
+              </ol>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                <strong>Tip:</strong> Use this to remove auto-generated cover sections (like "Technical Implementation Plan") or to move the Executive Summary to the top before delivering to a client.
+              </div>
+            </>
+          ),
+        },
+        {
+          title: 'Refining Sections',
+          content: (
+            <>
+              <p>You can improve the writing in your draft using two refine tools:</p>
+              <ul className="list-disc ml-4 space-y-2 mt-2">
+                <li><strong>Per-section Refine</strong> — click <strong>Refine</strong> on any expanded section to tighten the text, apply the template style, or write a custom instruction. You'll see a before/after preview before applying.</li>
+                <li><strong>Whole-Document Refine</strong> — applies an instruction (e.g. "tighten all sections by 30%") to every section at once. Results appear as a preview you can accept or discard per section.</li>
+              </ul>
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-100 rounded-lg text-sm text-yellow-800">
+                <strong>Note:</strong> Whole-Document Refine sends multiple requests to Claude and may take a minute to complete for large drafts.
+              </div>
+            </>
+          ),
+        },
+        {
           title: 'Exporting to Word',
           content: (
             <>
