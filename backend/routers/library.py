@@ -352,6 +352,37 @@ def reject_doc(
     return LibraryApprovalResponse(id=doc.id, status=doc.status.value, approved_at=doc.approved_at)
 
 
+class LibraryChunkResponse(BaseModel):
+    id: int
+    section_title: str
+    section_level: int
+    tech_tags: list
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/{doc_id}/chunks", response_model=List[LibraryChunkResponse])
+def list_chunks(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """List chunks for a library document."""
+    from models.library import LibraryChunk
+    doc = db.query(LibraryDocument).filter(LibraryDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Library document not found")
+    chunks = (
+        db.query(LibraryChunk)
+        .filter(LibraryChunk.library_doc_id == doc_id)
+        .order_by(LibraryChunk.created_at)
+        .all()
+    )
+    return chunks
+
+
 class PromoteSectionRequest(BaseModel):
     draft_id: int
     section_key: str

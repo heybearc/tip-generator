@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import React from 'react'
-import { Library, Search, Tag, FileText, CheckCircle, Clock, XCircle, Upload, Trash2, Sparkles, Pencil, Check, X } from 'lucide-react'
+import { Library, Search, Tag, FileText, CheckCircle, Clock, XCircle, Upload, Trash2, Sparkles, Pencil, Check, X, ChevronDown, ChevronRight, Layers } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+
+interface LibraryChunk {
+  id: number
+  section_title: string
+  section_level: number
+  tech_tags: string[]
+  created_at: string
+}
 
 interface LibraryDoc {
   id: number
@@ -55,6 +63,27 @@ export default function LibraryPage() {
   // Inline edit state: docId -> { title, category } draft
   const [editing, setEditing] = useState<Record<number, { title: string; category: string }>>({})
   const [saving, setSaving] = useState<number | null>(null)
+
+  // Chunk expansion state: docId -> chunks (null = not loaded, [] = loaded empty)
+  const [expandedChunks, setExpandedChunks] = useState<Record<number, LibraryChunk[] | null>>({})
+  const [chunksLoading, setChunksLoading] = useState<Record<number, boolean>>({})
+
+  const toggleChunks = async (docId: number) => {
+    if (expandedChunks[docId] !== undefined) {
+      setExpandedChunks(prev => { const n = { ...prev }; delete n[docId]; return n })
+      return
+    }
+    setChunksLoading(prev => ({ ...prev, [docId]: true }))
+    try {
+      const res = await fetch(`/api/library/${docId}/chunks`, { credentials: 'include' })
+      if (res.ok) {
+        const chunks = await res.json()
+        setExpandedChunks(prev => ({ ...prev, [docId]: chunks }))
+      }
+    } finally {
+      setChunksLoading(prev => ({ ...prev, [docId]: false }))
+    }
+  }
 
   const fetchDocs = async () => {
     setLoading(true)
@@ -352,7 +381,11 @@ export default function LibraryPage() {
                   const st = STATUS_LABELS[doc.status] ?? STATUS_LABELS.pending
                   return (
                     <div key={doc.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow">
-                      <FileText className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                      {doc.title.startsWith('[Promoted Sections]') ? (
+                        <Layers className="w-5 h-5 text-purple-400 mt-0.5 shrink-0" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">
                           <span className="font-medium text-gray-900 text-sm">{doc.title}</span>
@@ -409,6 +442,38 @@ export default function LibraryPage() {
                         <p className="text-xs text-gray-400">
                           {doc.original_filename} · {formatBytes(doc.file_size)} · uploaded by {doc.uploaded_by_username}
                         </p>
+                        {/* Chunk list toggle */}
+                        <button
+                          onClick={() => toggleChunks(doc.id)}
+                          className="mt-1.5 flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800"
+                        >
+                          {chunksLoading[doc.id] ? (
+                            <span className="text-gray-400">Loading…</span>
+                          ) : expandedChunks[doc.id] !== undefined ? (
+                            <><ChevronDown className="w-3 h-3" />Hide chunks ({expandedChunks[doc.id]!.length})</>
+                          ) : (
+                            <><ChevronRight className="w-3 h-3" />Show chunks</>
+                          )}
+                        </button>
+                        {expandedChunks[doc.id] !== undefined && (
+                          <div className="mt-2 space-y-1">
+                            {expandedChunks[doc.id]!.length === 0 ? (
+                              <p className="text-xs text-gray-400 italic">No chunks indexed.</p>
+                            ) : (
+                              expandedChunks[doc.id]!.map(chunk => (
+                                <div key={chunk.id} className="flex items-start gap-2 bg-purple-50 border border-purple-100 rounded px-2 py-1">
+                                  <Layers className="w-3 h-3 text-purple-400 mt-0.5 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs font-medium text-gray-800">{chunk.section_title}</span>
+                                    {chunk.tech_tags.length > 0 && (
+                                      <span className="ml-2 text-xs text-purple-500">{chunk.tech_tags.join(', ')}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
                       {isAdmin && (
                         <div className="flex items-center gap-1 shrink-0">
