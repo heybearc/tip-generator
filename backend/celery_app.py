@@ -169,6 +169,27 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             draft.library_examples_used = [{"title": e["title"], "category": e["category"]} for e in library_examples]
             db.commit()
 
+        # --- PII Scrubbing (opt-in per draft) ---
+        # Creates shallow Document-like objects with scrubbed text so originals are untouched.
+        if draft.scrub_pii:
+            try:
+                from services.pii import scrub as pii_scrub
+                import copy
+
+                def _scrubbed_doc(doc):
+                    if doc is None:
+                        return None
+                    clone = copy.copy(doc)
+                    clone.extracted_text = pii_scrub(doc.extracted_text or "", draft.id, db)
+                    return clone
+
+                discovery_doc = _scrubbed_doc(discovery_doc)
+                service_order_doc = _scrubbed_doc(service_order_doc)
+                supplemental_docs = [_scrubbed_doc(d) for d in (supplemental_docs or [])]
+                print(f"[generate_tip_task] PII scrubbing applied for draft {draft.id}")
+            except Exception as e:
+                print(f"[generate_tip_task] PII scrub failed, continuing without scrub: {e}")
+
         claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
         updated_draft = asyncio.run(
             claude.generate_tip(
@@ -185,6 +206,17 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
         if template_file_id:
             updated_draft.template_file_id = template_file_id
             db.commit()
+
+        # --- PII Restore ---
+        # Re-substitute tokens back into the generated content before storing.
+        if draft.scrub_pii and updated_draft.content:
+            try:
+                from services.pii import restore as pii_restore
+                updated_draft.content = pii_restore(updated_draft.content, draft.id, db)
+                db.commit()
+                print(f"[generate_tip_task] PII restored for draft {draft.id}")
+            except Exception as e:
+                print(f"[generate_tip_task] PII restore failed: {e}")
 
         return {"draft_id": draft_id, "status": "completed"}
 

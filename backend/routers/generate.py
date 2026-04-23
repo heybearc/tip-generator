@@ -92,6 +92,7 @@ async def create_draft(
         discovery_document_id=draft_data.discovery_document_id,
         service_order_document_id=draft_data.service_order_document_id,
         template_id=draft_data.template_id,
+        scrub_pii=draft_data.scrub_pii,
         status=DraftStatus.DRAFT
     )
     

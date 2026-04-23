@@ -1,7 +1,8 @@
 """
 Draft model for TIP work in progress
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, JSON, Boolean, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -67,6 +68,7 @@ class Draft(Base):
     generation_tokens = Column(Integer, nullable=True)
     celery_task_id = Column(String, nullable=True)
     library_examples_used = Column(JSON, nullable=True)  # [{title, category}] injected at generation time
+    scrub_pii = Column(Boolean, nullable=False, default=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -83,3 +85,16 @@ class Draft(Base):
 
     def __repr__(self):
         return f"<Draft(id={self.id}, title={self.title}, status={self.status})>"
+
+
+class DraftPIIMap(Base):
+    __tablename__ = "draft_pii_maps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    draft_id = Column(Integer, ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    pii_map = Column(JSONB, nullable=False, default=dict)  # {"{{TOKEN}}": "original_value"}
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<DraftPIIMap(draft_id={self.draft_id}, tokens={len(self.pii_map)})>"

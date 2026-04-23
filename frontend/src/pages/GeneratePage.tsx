@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, XCircle } from 'lucide-react'
+import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, XCircle, ShieldCheck } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -40,6 +40,7 @@ export default function GeneratePage() {
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [scrubPii, setScrubPii] = useState(false)
   const [progress, setProgress] = useState<ProgressState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -121,6 +122,7 @@ export default function GeneratePage() {
         discovery_document_id: discoveryDocId,
         service_order_document_id: serviceOrderDocId,
         supplemental_document_ids: supplementalDocIds.length ? supplementalDocIds : null,
+        scrub_pii: scrubPii,
       })
       const draftId = createRes.data.id
 
@@ -299,6 +301,24 @@ export default function GeneratePage() {
             {error}
           </div>
         )}
+
+        <label className="flex items-start gap-3 cursor-pointer select-none group">
+          <input
+            type="checkbox"
+            checked={scrubPii}
+            onChange={e => setScrubPii(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <div>
+            <div className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+              <ShieldCheck className="w-4 h-4 text-green-600" />
+              Scrub customer PII before sending to Claude
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Replaces IPs, hostnames, names, and other identifiers with tokens — restored automatically after generation. Recommended for sensitive engagements.
+            </p>
+          </div>
+        </label>
 
         <button
           onClick={handleGenerate}
