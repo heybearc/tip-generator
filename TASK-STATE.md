@@ -23,7 +23,7 @@
 - ✅ **v0.9.0 RELEASED** — LIVE=BLUE (CT190, 10.92.3.91) | STANDBY=GREEN (CT191, 10.92.3.92) | 56/56 tests passing
 
 ### Next steps
-1. **Verify PII quality on real TIP** — generate a test TIP with scrub toggle enabled; confirm output is correct after restore
+1. **Verify PII quality on real TIP** — ⏳ PENDING (next generation) — scrub toggle enabled; confirm output is correct after restore
 2. **Admin UI: promote section → chunk** — allow admin to manually promote a draft section to library chunk (Phase 2.5 backlog)
 3. **PII scrub → always-on** — after quality verified, flip default to `True` in `DraftCreate` schema
 

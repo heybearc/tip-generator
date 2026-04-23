@@ -55,7 +55,25 @@ def recover_orphaned_drafts(sender, **kwargs):
         print(f"[startup] Orphan recovery failed: {e}")
 
 
-@celery.task(bind=True, name="generate_tip", max_retries=1)
+TRANSIENT_STATUS_CODES = {429, 529}
+MAX_RETRIES = 3
+RETRY_BACKOFF = [30, 60, 120]  # seconds between attempts 1→2, 2→3, 3→4
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Return True if the exception is a transient API error worth retrying."""
+    msg = str(exc).lower()
+    return (
+        "overloaded" in msg
+        or "rate_limit" in msg
+        or "529" in msg
+        or "429" in msg
+        or "connection" in msg
+        or "timeout" in msg
+    )
+
+
+@celery.task(bind=True, name="generate_tip", max_retries=MAX_RETRIES)
 def generate_tip_task(self, draft_id: int, template_file_id: int | None):
     """
     Run Claude TIP generation in an isolated worker process.
@@ -71,9 +89,16 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
 
     db = SessionLocal()
     try:
+        from services.audit import log as audit_log
         draft = db.query(Draft).filter(Draft.id == draft_id).first()
         if not draft:
             return {"error": f"Draft {draft_id} not found"}
+
+        audit_log(db, draft_id, "task_start", {
+            "title": draft.title,
+            "scrub_pii": draft.scrub_pii,
+            "template_file_id": template_file_id,
+        })
 
         from models.user import User as UserModel
         user = db.query(UserModel).filter(UserModel.id == draft.user_id).first()
@@ -186,9 +211,14 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 discovery_doc = _scrubbed_doc(discovery_doc)
                 service_order_doc = _scrubbed_doc(service_order_doc)
                 supplemental_docs = [_scrubbed_doc(d) for d in (supplemental_docs or [])]
+                from models.draft import DraftPIIMap
+                pii_row = db.query(DraftPIIMap).filter(DraftPIIMap.draft_id == draft.id).first()
+                token_count = len(pii_row.pii_map) if pii_row else 0
                 print(f"[generate_tip_task] PII scrubbing applied for draft {draft.id}")
+                audit_log(db, draft.id, "pii_scrub", {"tokens_replaced": token_count})
             except Exception as e:
                 print(f"[generate_tip_task] PII scrub failed, continuing without scrub: {e}")
+                audit_log(db, draft.id, "pii_scrub", {"error": str(e), "skipped": True})
 
         claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
         updated_draft = asyncio.run(
@@ -215,20 +245,45 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 updated_draft.content = pii_restore(updated_draft.content, draft.id, db)
                 db.commit()
                 print(f"[generate_tip_task] PII restored for draft {draft.id}")
+                audit_log(db, draft.id, "pii_restore", {"status": "ok"})
             except Exception as e:
                 print(f"[generate_tip_task] PII restore failed: {e}")
+                audit_log(db, draft.id, "pii_restore", {"error": str(e)})
 
+        audit_log(db, draft_id, "task_complete", {
+            "tokens": updated_draft.generation_tokens,
+            "model": updated_draft.claude_model,
+        })
         return {"draft_id": draft_id, "status": "completed"}
 
     except Exception as exc:
+        attempt = self.request.retries  # 0-based: 0 = first attempt
+        retryable = _is_transient(exc) and attempt < MAX_RETRIES
+        countdown = RETRY_BACKOFF[attempt] if attempt < len(RETRY_BACKOFF) else RETRY_BACKOFF[-1]
+
         try:
             draft = db.query(Draft).filter(Draft.id == draft_id).first()
             if draft:
-                draft.status = DraftStatus.FAILED
-                draft.content = f"Generation failed: {str(exc)}"
+                if retryable:
+                    # Keep draft in generating state so UI shows it still working
+                    draft.status = DraftStatus.GENERATING
+                    draft.generation_prompt = None
+                else:
+                    draft.status = DraftStatus.FAILED
+                    draft.content = f"Generation failed: {str(exc)}"
                 db.commit()
+            audit_log(db, draft_id, "task_failed", {
+                "error": str(exc),
+                "attempt": attempt + 1,
+                "retrying": retryable,
+                "retry_in_seconds": countdown if retryable else None,
+            })
         except Exception:
             pass
-        raise self.retry(exc=exc, countdown=0, max_retries=0)
+
+        if retryable:
+            raise self.retry(exc=exc, countdown=countdown)
+        # Hard failure — do not retry
+        return {"draft_id": draft_id, "status": "failed", "error": str(exc)}
     finally:
         db.close()

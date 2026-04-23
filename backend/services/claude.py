@@ -233,6 +233,14 @@ class ClaudeService:
                     "sections": len(sections),
                 })
                 db.commit()
+                try:
+                    from services.audit import log as audit_log
+                    section_titles = [s.get("title", "") for s in chunk if s.get("title")]
+                    audit_log(db, draft.id, "batch_start", {
+                        "sections": section_titles,
+                    }, batch_index=chunk_idx + 1, total_batches=total_chunks)
+                except Exception:
+                    pass
 
             # Retrieve RAG chunks for sections in this batch
             rag_chunks = []
@@ -251,6 +259,14 @@ class ClaudeService:
                             })
                     if rag_chunks:
                         print(f"[generate] RAG injected {len(rag_chunks)} chunks for chunk {chunk_idx + 1}")
+                        try:
+                            from services.audit import log as audit_log
+                            audit_log(db, draft.id, "rag_inject", {
+                                "chunks_injected": len(rag_chunks),
+                                "sources": [c["source"] for c in rag_chunks],
+                            }, batch_index=chunk_idx + 1, total_batches=total_chunks)
+                        except Exception:
+                            pass
                 except Exception as e:
                     print(f"[generate] RAG retrieval skipped: {e}")
 
@@ -280,8 +296,19 @@ class ClaudeService:
                 messages=[{"role": "user", "content": prompt}]
             )
 
+            chunk_tokens = response.usage.output_tokens
             all_content_parts.append(response.content[0].text.strip())
-            total_tokens += response.usage.output_tokens
+            total_tokens += chunk_tokens
+
+            if db:
+                try:
+                    from services.audit import log as audit_log
+                    audit_log(db, draft.id, "claude_call", {
+                        "output_tokens": chunk_tokens,
+                        "model": self.model,
+                    }, batch_index=chunk_idx + 1, total_batches=total_chunks)
+                except Exception:
+                    pass
 
         return "\n\n".join(all_content_parts), total_tokens
 

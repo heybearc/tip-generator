@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, Upload, Wand2, FolderOpen, ArrowRight, ShieldCheck, Lock, ServerOff } from 'lucide-react'
+import { FileText, Upload, Wand2, FolderOpen, ArrowRight, ShieldCheck, Lock, ServerOff, EyeOff } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -96,7 +96,7 @@ export default function HomePage() {
           <ShieldCheck className="h-5 w-5 text-green-600" />
           <span className="text-sm font-semibold text-green-800">Your Data is Protected</span>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-xs text-green-800">
+        <div className="grid grid-cols-4 gap-3 text-xs text-green-800">
           <div className="flex flex-col items-center gap-1">
             <Lock className="h-4 w-4 text-green-600" />
             <span className="font-medium">Not stored</span>
@@ -111,6 +111,11 @@ export default function HomePage() {
             <ShieldCheck className="h-4 w-4 text-green-600" />
             <span className="font-medium">Encrypted</span>
             <span className="text-green-600 text-center">All data sent via TLS — never stored in plain text externally</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <EyeOff className="h-4 w-4 text-green-600" />
+            <span className="font-medium">Pseudonymized</span>
+            <span className="text-green-600 text-center">Customer names, IPs &amp; hostnames are masked before leaving your infrastructure</span>
           </div>
         </div>
       </div>
