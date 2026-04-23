@@ -197,6 +197,13 @@ When adding a decision, use this format:
 - **Current library role:** Seed corpus — every approved doc is future chunk source material. Tag quality and admin curation now directly improve Phase 2.5 retrieval quality later.
 - **When:** 2026-04-23
 
+## D-LOCAL-023: Playwright global-setup reuses auth-state.json if <25 min old
+- **Decision:** `global-setup.ts` checks `auth-state.json` mtime before re-authenticating. If the file is <25 min old, setup exits immediately — reusing the saved session.
+- **Why:** Each `npx playwright test` invocation re-runs `globalSetup`. The Authentik flow executor tokens expire within seconds of the redirect, so a second `page.goto('/api/auth/login')` in a new browser context fails with a 45s timeout. Reusing a fresh session avoids the race entirely.
+- **When:** 2026-04-23
+- **Location:** `tests/global-setup.ts`
+- **Consequence:** If session is stale (>25 min), full re-auth runs as normal. Manual `touch auth-state.json` forces reuse of any existing file within the window.
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.

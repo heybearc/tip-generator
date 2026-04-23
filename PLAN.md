@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
 **Last updated:** 2026-04-23  
-**Current phase:** Security / Phase 3 prep  
-**Status:** Phases 2.1–2.5 complete; security review open; Phase 3 gated on security decision
+**Current phase:** Post-v0.10.0 / Phase 3 prep  
+**Status:** Phases 2.1–2.5 complete; v0.10.0 live; security review open; Phase 3 gated on security decision
 
 ---
 
@@ -27,6 +27,7 @@
 - ✅ **Few-shot scoring** — keyword overlap scoring replaces blind recency selection; scores logged
 - ✅ **Excel parser tuning** — dropdown extraction, table advance bug fix, KV threshold relaxed
 - ✅ **Phase 2.5: Section-chunk playbook (RAG)** — pgvector + `library_chunks` table, BM25 retrieval (no external API), 193 chunks from 11 docs, injected at generation time per section
+- ✅ **v0.10.0** — section order/visibility, multi-pass pillars, PII fix, Celery isolation, refine-all fix, cancel fix — LIVE 2026-04-23
 - ⚠️ **Security: Customer data privacy** — customer data sent to Anthropic API; policy decision + implementation required (see TASK-STATE.md Security section)
 
 ---

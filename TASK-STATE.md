@@ -1,31 +1,31 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-23 (v0.9.0 released — PII pseudonymization, RAG chunks, data privacy)
+**Last updated:** 2026-04-23 (v0.10.0 released — section management, full pillars, PII fix, Celery isolation)
 **Current branch:** main
-**Working on:** Idle — v0.9.0 live
+**Working on:** Idle — v0.10.0 live
 
 ---
 
 ## Current Task
-**Phase 2.5 — RAG / Section-Chunk Playbook** — COMPLETE ✅  
-**Security: Customer Data Privacy** — COMPLETE ✅ (`do_not_store` header, PII pseudonymization, `SECURITY.md`)
-**v0.9.0** — LIVE ✅
+**v0.10.0** — LIVE ✅ (GREEN, CT191, 10.92.3.92)
 
 ### Confirmed Complete
-- ✅ **Phase 2.1** — Admin dashboard
-- ✅ **Phase 2.2** — TIP Library (few-shot injection, RAG-ready schema)
-- ✅ **Phase 2.3** — Draft Collaboration (collaborators table, invite/remove, typeahead search, shared badge)
-- ✅ **v0.6.0** — LIVE=GREEN (CT191, 10.92.3.92) | STANDBY=BLUE (CT190, 10.92.3.91)
-- ✅ **Phase 2.4** — Multi-document context injection validated; 40-page output with 4 docs confirmed correct
-- ✅ **Few-shot scoring** — replaced blind "2 most recent" with keyword overlap scoring (draft title + discovery filename vs library title + category); scores logged at generation time
-- ✅ **Excel parser tuning** — dropdown validation extraction added (`[Options: ...]` hint in output); table row-advance bug fixed; KV threshold relaxed to 4 cells
-- ✅ **Phase 2.5 RAG** — pgvector + `library_chunks` table; BM25 retrieval (no external API); 193 chunks indexed from 11 approved library docs; chunks injected at generation time per section; MCP deploy fixed to use venv pip
-- ✅ **v0.9.0 RELEASED** — LIVE=BLUE (CT190, 10.92.3.91) | STANDBY=GREEN (CT191, 10.92.3.92) | 56/56 tests passing
+- ✅ **Phase 2.1–2.5** — all complete (see PLAN.md)
+- ✅ **v0.9.0** — released 2026-04-23
+- ✅ **Section order & visibility** — drag-and-drop manager; export respects visibility
+- ✅ **Multi-pass pillar generation** — all 6 pillars guaranteed; 2x3-pillar passes
+- ✅ **PII scrubbing fix** — `SimpleNamespace` prevents SQLAlchemy session flush crash
+- ✅ **Celery queue isolation** — `CELERY_QUEUE` env var; celery-blue / celery-green per environment
+- ✅ **Cancel generation fix** — revokes Celery task, clears `generation_prompt`
+- ✅ **Dynamic batch count** — stale pre-write removed; UI shows correct chunk total
+- ✅ **Refine-all fix** — skips structural sections, 8 workers, 5min nginx+frontend timeout
+- ✅ **E2E test suite** — 19/19 passing on STANDBY before release
+- ✅ **v0.10.0 RELEASED** — LIVE=GREEN (CT191, 10.92.3.92) | STANDBY=BLUE (CT190, 10.92.3.91) | synced
 
 ### Next steps
-1. **Verify PII quality on real TIP** — ⏳ PENDING (next generation) — scrub toggle enabled; confirm output is correct after restore
-2. **Admin UI: promote section → chunk** — allow admin to manually promote a draft section to library chunk (Phase 2.5 backlog)
-3. **PII scrub → always-on** — after quality verified, flip default to `True` in `DraftCreate` schema
+1. **PII quality verification** — run a real generation with scrub enabled; confirm restored output is correct
+2. **PII scrub → always-on** — after quality verified, flip default to `True` in `DraftCreate` schema
+3. **Admin UI: promote section → chunk** — Phase 2.5 backlog item
 
 ---
 
@@ -62,7 +62,7 @@
 
 ## Known Issues
 - ℹ️ **2 Playwright tests skipped** — data-dependent (require existing drafts); acceptable for now.
-- ℹ️ **Tests run against STANDBY** — update `qa-01:/opt/tests/tip-generator/.env.test` BASE_URL to STANDBY node before `/test-release`.
+- ℹ️ **Tests run against STANDBY** — pass `BASE_URL=https://green-tip.cloudigan.net` (or blue) when running on qa-01; global-setup reuses auth-state.json if <25 min old.
 - ℹ️ **`.windsurf` symlink** — reappears as untracked after each session (local symlink, not tracked in git). Safe to ignore.
 
 ---
@@ -75,4 +75,5 @@
 - Auth: Authentik at auth.cloudigan.net, OIDC client `MFO9C9ynlvpoX895YRSutwCl7xBouyAy4oOjNmI9`
 - E2E tests: qa-01 `/opt/tests/tip-generator/` — run with `npx playwright test`
 - Deploy: `ssh tip-blue 'cd /opt/tip-generator && git pull && /opt/tip-generator/deploy.sh'`
-- Current LIVE: GREEN (CT191, 10.92.3.92) — switched 2026-04-22 after v0.6.0 release
+- Current LIVE: GREEN (CT191, 10.92.3.92) — switched 2026-04-23 after v0.10.0 release (switch #1)
+- Domains: https://tip.cloudigan.net → GREEN (LIVE) | https://green-tip.cloudigan.net (LIVE) | https://blue-tip.cloudigan.net (STANDBY)
