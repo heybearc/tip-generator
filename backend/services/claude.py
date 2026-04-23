@@ -119,15 +119,6 @@ class ClaudeService:
             )
 
             if use_chunked:
-                sections_count = len(template_structure.get("sections", []))
-                chunks_count = (sections_count + SECTION_CHUNK_SIZE - 1) // SECTION_CHUNK_SIZE
-                draft.generation_prompt = json.dumps({
-                    "mode": "chunked",
-                    "chunk": 0,
-                    "total_chunks": chunks_count,
-                    "sections": sections_count,
-                })
-                db.commit()
                 generated_content, total_tokens = await self._generate_chunked(
                     draft, discovery_doc, service_order_doc, template_structure, db,
                     library_examples=library_examples,
