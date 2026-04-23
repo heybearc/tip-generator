@@ -67,6 +67,11 @@ class LibraryCategoryUpdate(BaseModel):
     category: str
 
 
+class LibraryDocUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+
+
 # --- Helpers ---
 
 def _build_response(doc: LibraryDocument, db: Session) -> LibraryDocumentResponse:
@@ -268,6 +273,29 @@ def update_category(
         raise HTTPException(status_code=404, detail="Library document not found")
     doc.category = body.category.strip()
     doc.category_suggested = False
+    db.commit()
+    return _build_response(doc, db)
+
+
+@router.patch("/{doc_id}/update", response_model=LibraryDocumentResponse)
+def update_doc(
+    doc_id: int,
+    body: LibraryDocUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Update title and/or category of a library document — admin only, any status."""
+    doc = db.query(LibraryDocument).filter(LibraryDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Library document not found")
+    if body.title is not None:
+        val = body.title.strip()
+        if not val:
+            raise HTTPException(status_code=400, detail="Title cannot be empty")
+        doc.title = val
+    if body.category is not None:
+        doc.category = body.category.strip()
+        doc.category_suggested = False
     db.commit()
     return _build_response(doc, db)
 

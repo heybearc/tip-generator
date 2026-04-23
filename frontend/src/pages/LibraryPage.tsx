@@ -52,9 +52,9 @@ export default function LibraryPage() {
   const [uploadDescription, setUploadDescription] = useState('')
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  // Inline category edit state: docId -> draft value
-  const [editingCategory, setEditingCategory] = useState<Record<number, string>>({})
-  const [savingCategory, setSavingCategory] = useState<number | null>(null)
+  // Inline edit state: docId -> { title, category } draft
+  const [editing, setEditing] = useState<Record<number, { title: string; category: string }>>({})
+  const [saving, setSaving] = useState<number | null>(null)
 
   const fetchDocs = async () => {
     setLoading(true)
@@ -101,22 +101,33 @@ export default function LibraryPage() {
     fetchCategories()
   }
 
-  const handleSaveCategory = async (id: number) => {
-    const val = (editingCategory[id] || '').trim()
-    if (!val) return
-    setSavingCategory(id)
+  const startEditing = (doc: LibraryDoc) => {
+    setEditing(prev => ({ ...prev, [doc.id]: { title: doc.title, category: doc.category } }))
+  }
+
+  const cancelEditing = (id: number) => {
+    setEditing(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
+
+  const handleSaveDoc = async (id: number) => {
+    const draft = editing[id]
+    if (!draft) return
+    if (!draft.title.trim()) return
+    setSaving(id)
     try {
-      await fetch(`/api/library/${id}/set-category`, {
+      const res = await fetch(`/api/library/${id}/update`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: val }),
+        body: JSON.stringify({ title: draft.title.trim(), category: draft.category.trim() }),
       })
-      setEditingCategory(prev => { const n = { ...prev }; delete n[id]; return n })
-      fetchDocs()
+      if (!res.ok) throw new Error('Save failed')
+      const updated: LibraryDoc = await res.json()
+      setDocs(prev => prev.map(d => d.id === id ? updated : d))
+      cancelEditing(id)
       fetchCategories()
     } finally {
-      setSavingCategory(null)
+      setSaving(null)
     }
   }
 
@@ -354,44 +365,41 @@ export default function LibraryPage() {
                             </span>
                           )}
                         </div>
-                        {/* Inline category edit for admin */}
-                        {isAdmin && doc.status === 'pending' ? (
-                          <div className="flex items-center gap-1 mb-1">
-                            {editingCategory[doc.id] !== undefined ? (
-                              <>
-                                <input
-                                  type="text"
-                                  value={editingCategory[doc.id]}
-                                  onChange={e => setEditingCategory(prev => ({ ...prev, [doc.id]: e.target.value }))}
-                                  list="category-suggestions"
-                                  className="border border-purple-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 w-40"
-                                />
-                                <button
-                                  onClick={() => handleSaveCategory(doc.id)}
-                                  disabled={savingCategory === doc.id}
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setEditingCategory(prev => { const n = { ...prev }; delete n[doc.id]; return n })}
-                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            ) : (
+                        {/* Inline edit for admin — title + category, all statuses */}
+                        {isAdmin && editing[doc.id] !== undefined ? (
+                          <div className="flex flex-col gap-1 mt-1 mb-1">
+                            <input
+                              type="text"
+                              value={editing[doc.id].title}
+                              onChange={e => setEditing(prev => ({ ...prev, [doc.id]: { ...prev[doc.id], title: e.target.value } }))}
+                              placeholder="Title"
+                              className="border border-blue-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 w-64"
+                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={editing[doc.id].category}
+                                onChange={e => setEditing(prev => ({ ...prev, [doc.id]: { ...prev[doc.id], category: e.target.value } }))}
+                                placeholder="Category"
+                                list="category-suggestions"
+                                className="border border-purple-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 w-40"
+                              />
                               <button
-                                onClick={() => setEditingCategory(prev => ({ ...prev, [doc.id]: doc.category }))}
-                                className="flex items-center gap-1 text-xs text-gray-500 hover:text-purple-600 transition-colors"
+                                onClick={() => handleSaveDoc(doc.id)}
+                                disabled={saving === doc.id}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                title="Save"
                               >
-                                <Tag className="w-3 h-3" />
-                                <span className={doc.category_suggested ? 'text-purple-600 font-medium' : ''}>
-                                  {doc.category || <span className="italic text-gray-400">no category</span>}
-                                </span>
-                                <Pencil className="w-3 h-3 opacity-50" />
+                                <Check className="w-3.5 h-3.5" />
                               </button>
-                            )}
+                              <button
+                                onClick={() => cancelEditing(doc.id)}
+                                className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                title="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           doc.description && (
@@ -404,6 +412,13 @@ export default function LibraryPage() {
                       </div>
                       {isAdmin && (
                         <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => editing[doc.id] !== undefined ? cancelEditing(doc.id) : startEditing(doc)}
+                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                            title="Edit title / category"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
                           {doc.status === 'pending' && (
                             <>
                               <button
