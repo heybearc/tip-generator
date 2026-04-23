@@ -197,7 +197,44 @@
 - Admin UI: promote a draft section → library chunk
 - **Prerequisite:** Library must have 10+ approved docs across 3+ categories before retrieval adds signal
 
-### Phase 3: Advanced Features (Future)
+### Phase 3: Real-Time Collaborative Editor (D-LOCAL-022)
+
+**Vision:** True Google Docs-style concurrent editing for TIP drafts — presence indicators, node-anchored comments, track changes, suggestion mode.
+
+**Architecture decision:** ProseMirror JSON storage + Yjs CRDT + FastAPI WebSocket. Do NOT use HTML storage — it cannot support real-time merge or track changes without a second migration.
+
+**Phase 3-A: Storage Migration (prerequisite, ~2 days)**
+- Add `content_format` enum column to `drafts` (`markdown` | `prosemirror`)
+- Migrate existing drafts on first edit (markdown → ProseMirror JSON, flip flag)
+- New AI generations write ProseMirror JSON directly (one-time `markdown → JSON` conversion at generation time)
+- Rewrite DOCX exporter: replace line-by-line markdown parser with ProseMirror JSON node walker
+- Remove all markdown/HTML conversion hacks from `TipTapEditor.tsx` and `generate.py`
+
+**Phase 3-B: Real-Time Sync (~2-3 days)**
+- Add Yjs + y-prosemirror to frontend
+- FastAPI WebSocket endpoint: `/ws/drafts/{id}`
+- Presence indicators (who is editing which section)
+- Cursor positions synced across users
+- Last-write-wins replaced by CRDT merge (no data loss on concurrent edits)
+
+**Phase 3-C: Comments (~1-2 days)**
+- TipTap Comments extension — anchored to specific document nodes
+- Comment threads: create, reply, resolve
+- Comment authors + timestamps
+- Visible in sidebar alongside the section being commented on
+
+**Phase 3-D: Track Changes / Suggestions (~2-3 days)**
+- Insertions/deletions marked per user (accept/reject model)
+- Suggestion mode: propose edits without committing
+- Owner or admin accepts/rejects suggestions
+- Options: TipTap Pro track changes extension, or custom implementation
+
+**Prerequisites before starting Phase 3:**
+- Library has 10+ approved docs (for Phase 2.5 RAG to be worth doing in parallel)
+- Current markdown hacks documented and isolated — do not add new ones
+- Dedicated sprint — do not interleave with feature work
+
+### Phase 3+: Advanced Features
 - AI-powered template suggestions
 - Batch processing
 - Advanced analytics — token usage, cost per generation, cost with BYOK keys

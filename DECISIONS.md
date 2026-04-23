@@ -167,6 +167,23 @@ When adding a decision, use this format:
 - **Correction:** Both nodes now at `23e155e`. No rollback needed.
 - **When:** 2026-04-23
 
+## D-LOCAL-022: Draft Editor Storage Migration — ProseMirror JSON + Real-Time Collaboration (Phase 3)
+- **Decision:** Migrate draft section storage from markdown strings to **ProseMirror JSON** (TipTap's native document format) and add real-time collaborative editing via **Yjs + WebSockets**.
+- **Why ProseMirror JSON over HTML:** HTML storage is a viable intermediate step but requires a second migration when real-time sync is added. ProseMirror JSON is the only format that natively supports operational transforms (Yjs CRDT), node-anchored comments, and track changes — all required features.
+- **Why not now:** This is an 8-10 day engineering effort requiring: (1) DB migration, (2) DOCX exporter rewrite as JSON node walker, (3) Yjs WebSocket transport, (4) Comments, (5) Track changes. Doing this mid-sprint creates high rollback risk. Current markdown hacks do not block users today.
+- **Current state accepted as tech debt:** The markdown storage + HTML passthrough hacks (alignment, table structure) are acknowledged technical debt. No new hacks will be added. All current hacks are isolated to `TipTapEditor.tsx` (frontend) and the line-parser in `generate.py` (backend).
+- **Collaboration model today:** Invite-based shared access (sequential editing, last-write-wins). Not real-time. This is the correct scope for Phase 2.3.
+- **Phase 3 target collaboration model:** True concurrent editing with presence, comments anchored to document nodes, suggestion/track-changes mode. Stack: TipTap + Yjs + y-prosemirror + FastAPI WebSocket.
+- **Migration path (Phase 3):**
+  1. Add `content_format` enum to drafts (`markdown` | `prosemirror`) — default `markdown`
+  2. On first TipTap edit, convert markdown → ProseMirror JSON, flip flag
+  3. New AI generations save as ProseMirror JSON directly
+  4. Rewrite DOCX exporter to walk ProseMirror JSON node tree
+  5. Add Yjs provider + WebSocket endpoint
+  6. Add Comments extension
+  7. Add Track Changes (TipTap Pro or custom)
+- **When:** 2026-04-23
+
 ## D-LOCAL-021: TIP Library long-term vision — Reusable Chunk Playbook with RAG
 - **Decision:** The TIP Library will evolve toward a **reusable section-chunk playbook** model, not just a whole-TIP few-shot library. Thrive's standard processes (e.g. M365 Migration Phase 2, Apple MDM Enrollment) will be stored as named, tagged chunks that can be injected at section level during generation — producing a best-practice TIP every time.
 - **Why:** Thrive Principal Architect team wants authoritative, repeatable process content — not just style examples. The distinction: few-shot teaches *how to write*; chunk injection delivers *what the answer is*. Over time the library becomes a living playbook that improves with every approved TIP.
