@@ -81,15 +81,6 @@ export default function DocumentsPage() {
     return new Date(dateString).toLocaleString()
   }
 
-  const getDocumentTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      'discovery_excel': 'Discovery Worksheet',
-      'service_order_pdf': 'Service Order',
-      'other': 'Other'
-    }
-    return labels[type] || type
-  }
-
   const getDocumentTypeColor = (type: string) => {
     const colors: Record<string, string> = {
       'discovery_excel': 'bg-green-100 text-green-800',
