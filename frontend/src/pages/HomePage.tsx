@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, Upload, Wand2, FolderOpen, ArrowRight } from 'lucide-react'
+import { FileText, Upload, Wand2, FolderOpen, ArrowRight, ShieldCheck, Lock, ServerOff } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -60,7 +60,7 @@ export default function HomePage() {
       <div className="mb-10">
         <FileText className="h-16 w-16 text-blue-600 mx-auto mb-4" />
         <h1 className="text-4xl font-bold text-gray-900 mb-3">Welcome to TIP Generator</h1>
-        <p className="text-lg text-gray-500">AI-powered Technical Implementation Plans using Claude Sonnet 4.6</p>
+        <p className="text-lg text-gray-500">AI-powered Technical Implementation Plans for Thrive Networks</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mt-8">
@@ -88,7 +88,31 @@ export default function HomePage() {
       </div>
 
       <div className="mt-10 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 p-5 rounded-xl max-w-2xl mx-auto">
-        <p className="text-sm font-medium text-gray-700">Powered by <span className="text-blue-600 font-semibold">Claude Sonnet 4.6</span> — latest AI model with superior technical writing capabilities</p>
+        <p className="text-sm font-medium text-gray-700">Powered by <span className="text-blue-600 font-semibold">Anthropic Claude</span> — enterprise-grade AI with superior technical writing capabilities</p>
+      </div>
+
+      <div className="mt-4 max-w-2xl mx-auto border border-green-200 bg-green-50 rounded-xl p-4">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <ShieldCheck className="h-5 w-5 text-green-600" />
+          <span className="text-sm font-semibold text-green-800">Your Data is Protected</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-xs text-green-800">
+          <div className="flex flex-col items-center gap-1">
+            <Lock className="h-4 w-4 text-green-600" />
+            <span className="font-medium">Not stored</span>
+            <span className="text-green-600 text-center">Anthropic does not retain your documents after processing</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <ServerOff className="h-4 w-4 text-green-600" />
+            <span className="font-medium">Not trained on</span>
+            <span className="text-green-600 text-center">Your data is never used to train AI models</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <ShieldCheck className="h-4 w-4 text-green-600" />
+            <span className="font-medium">Encrypted</span>
+            <span className="text-green-600 text-center">All data sent via TLS — never stored in plain text externally</span>
+          </div>
+        </div>
       </div>
     </div>
   )

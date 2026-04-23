@@ -66,7 +66,10 @@ class ClaudeService:
         if not self.api_key:
             raise ValueError("No Claude API key configured. Add your Anthropic API key in your profile settings.")
 
-        self.client = Anthropic(api_key=self.api_key)
+        self.client = Anthropic(
+            api_key=self.api_key,
+            default_headers={"X-Anthropic-Do-Not-Store": "true"},
+        )
 
     def _doc_text(self, doc: Optional[Document]) -> str:
         """Return extracted text or empty string."""
