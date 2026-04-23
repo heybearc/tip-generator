@@ -121,20 +121,39 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
             except Exception:
                 pass
 
-        # Fetch approved library examples for few-shot injection (max 2, prefer same category)
+        # Fetch approved library examples for few-shot injection (max 2, scored by relevance)
         library_examples = []
         try:
             from models.library import LibraryDocument, LibraryStatus
-            query = (
+            approved_docs = (
                 db.query(LibraryDocument)
                 .filter(
                     LibraryDocument.status == LibraryStatus.APPROVED,
                     LibraryDocument.extracted_text != None,
                 )
+                .order_by(LibraryDocument.approved_at.desc())
+                .limit(20)
+                .all()
             )
-            # Prefer examples matching the draft title keywords (rough category hint)
-            approved_docs = query.order_by(LibraryDocument.approved_at.desc()).limit(10).all()
-            selected = approved_docs[:2]  # Cap at 2 examples
+
+            # Score each doc by keyword overlap with draft title + discovery doc filename
+            query_tokens = set(
+                w.lower()
+                for w in (draft.title + " " + (discovery_doc.original_filename if discovery_doc else "")).split()
+                if len(w) > 2
+            )
+
+            def _score(lib_doc):
+                candidate_tokens = set(
+                    w.lower()
+                    for w in (lib_doc.title + " " + (lib_doc.category or "")).split()
+                    if len(w) > 2
+                )
+                return len(query_tokens & candidate_tokens)
+
+            scored = sorted(approved_docs, key=_score, reverse=True)
+            selected = scored[:2]
+            print(f"[generate_tip_task] few-shot scores: {[(d.title, _score(d)) for d in approved_docs[:5]]}")
             library_examples = [
                 {"title": d.title, "category": d.category, "text": d.extracted_text or ""}
                 for d in selected

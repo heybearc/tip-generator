@@ -111,10 +111,30 @@ class UploadService:
 
         output_parts = []
 
+        # Build dropdown lookup: {(row, col): [allowed values]} from data validation
+        def build_dropdown_map(sheet):
+            dv_map = {}
+            for dv in sheet.data_validations.dataValidation:
+                if dv.type == "list" and dv.formula1:
+                    raw = dv.formula1.strip('"')
+                    options = [v.strip() for v in raw.split(",") if v.strip()]
+                    if options:
+                        for cell_range in str(dv.sqref).split():
+                            try:
+                                from openpyxl.utils import range_boundaries
+                                min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+                                for r in range(min_row, max_row + 1):
+                                    for c in range(min_col, max_col + 1):
+                                        dv_map[(r, c)] = options
+                            except Exception:
+                                pass
+            return dv_map
+
         for sheet_name in wb.sheetnames:
             try:
                 sheet = wb[sheet_name]
                 merge_map = build_merge_map(sheet)
+                dropdown_map = build_dropdown_map(sheet)
 
                 # Collect non-empty rows, resolving merged cells
                 rows = []
@@ -122,6 +142,10 @@ class UploadService:
                     cells = []
                     for col_idx, cell in enumerate(row, start=1):
                         val = merge_map.get((row_idx, col_idx), cell.value)
+                        # Append dropdown hint if cell has validation options and no value
+                        if val is None and (row_idx, col_idx) in dropdown_map:
+                            opts = dropdown_map[(row_idx, col_idx)]
+                            val = f"[Options: {', '.join(opts[:8])}]"
                         cells.append(str(val).strip() if val is not None else "")
                     # Strip trailing empty cells
                     while cells and cells[-1] == "":
@@ -167,8 +191,6 @@ class UploadService:
             # Two-column row where col A looks like a label (ends with : or is short)
             # and col B has a value — key-value pair
             if len(row) >= 2 and row[0] and row[1]:
-                label = row[0].rstrip(":")
-                value = row[1]
                 # Check if the next several rows also look like key-value pairs
                 kv_block = self._try_extract_kv_block(rows, i)
                 if kv_block:
@@ -179,13 +201,11 @@ class UploadService:
                     continue
 
             # Multi-column row — check if this is a table header
-            table = self._try_extract_table(rows, i)
+            table, rows_consumed = self._try_extract_table(rows, i)
             if table:
                 parts.append("")
                 parts.append(table)
-                # Advance past all table rows
-                table_rows = len(table.split("\n"))
-                i += max(table_rows - 1, 1)
+                i += rows_consumed
                 continue
 
             # Fallback: join non-empty cells
@@ -205,9 +225,9 @@ class UploadService:
         i = start
         while i < len(rows) and i < start + 50:
             row = rows[i]
-            # Stop if row has more than 3 non-empty cells (looks like a table row)
+            # Stop if row has more than 4 non-empty cells (looks like a table row)
             non_empty = [c for c in row if c]
-            if len(non_empty) > 3:
+            if len(non_empty) > 4:
                 break
             if len(non_empty) == 0:
                 i += 1
@@ -223,17 +243,17 @@ class UploadService:
         # Only treat as a kv block if we found at least 2 pairs
         return kv if len(kv) >= 2 else []
 
-    def _try_extract_table(self, rows: list, start: int) -> str:
+    def _try_extract_table(self, rows: list, start: int) -> tuple:
         """
         Check if rows starting at `start` form a table (header + data rows).
         Returns formatted table string if yes, empty string if no.
         """
         if start >= len(rows):
-            return ""
+            return "", 0
         header_row = rows[start]
         non_empty_headers = [c for c in header_row if c]
         if len(non_empty_headers) < 2:
-            return ""
+            return "", 0
 
         # Collect data rows that have the same column count
         data_rows = []
@@ -250,8 +270,9 @@ class UploadService:
             data_rows.append(row)
             i += 1
 
+        rows_consumed = (i - start)  # rows scanned past header
         if not data_rows:
-            return ""
+            return "", 0
 
         # Format as readable table
         # Pad columns to header count
@@ -266,7 +287,7 @@ class UploadService:
             # Only include rows with at least one value
             if any(v.strip() for v in values):
                 lines.append("  " + line)
-        return "\n".join(lines)
+        return "\n".join(lines), rows_consumed
     
     def _extract_from_pdf(self, file_path: Path) -> str:
         """Extract text from PDF file"""

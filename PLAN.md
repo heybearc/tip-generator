@@ -1,8 +1,8 @@
 # TIP Generator Plan
 
-**Last updated:** 2026-04-22  
-**Current phase:** Phase 2.3 — Draft Collaboration  
-**Status:** v0.5.1 live; Phases 2.1 + 2.2 complete; starting collaboration
+**Last updated:** 2026-04-23  
+**Current phase:** Phase 2.5 — RAG / Section-Chunk Playbook  
+**Status:** Phases 2.1–2.4 complete; few-shot scoring + Excel parser tuned; planning 2.5
 
 ---
 
@@ -23,6 +23,10 @@
 - ✅ **Phase 2.1: Admin dashboard** — Users/Docs/Drafts tabs, stats strip, role/active toggles, full model display
 - ✅ **Phase 2.2: TIP Library** — `library_documents` table, upload/approve/reject/delete API, Claude auto-category, text extraction, few-shot injection at generation time, RAG-ready schema (`embedding` field reserved), `LibraryPage.tsx`
 - ✅ **Phase 2.3: Draft Collaboration** — owner-locked drafts, invite-to-edit, typeahead user search, global doc visibility, shared badge in DraftsPage
+- ✅ **Phase 2.4: Multi-doc context injection** — validated with 4 docs, 40-page output confirmed correct
+- ✅ **Few-shot scoring** — keyword overlap scoring replaces blind recency selection; scores logged
+- ✅ **Excel parser tuning** — dropdown extraction, table advance bug fix, KV threshold relaxed
+- ⏳ **Phase 2.5: Section-chunk playbook (RAG)** — pgvector, chunk-level library, section injection
 
 ---
 
@@ -113,7 +117,7 @@
 ### High Priority
 - ~~**Add production Authentik redirect URI**~~ — ✅ `https://tip.cloudigan.net/api/auth/callback` registered in Authentik provider
 - ~~**PDF export**~~ — ✅ implemented (`/drafts/{id}/export/pdf`, LibreOffice headless)
-- **Excel parser tuning** — validate against real discovery workbooks; merged cells ✅ handled; remaining: dropdowns, nested tables, edge cases
+- ~~**Excel parser tuning**~~ ✅ — dropdowns extracted, table advance fixed, KV threshold relaxed
 
 ### Medium Priority
 - ~~**Draft management** — delete drafts, rename, duplicate~~ ✅ all three complete
@@ -123,7 +127,7 @@
 - **Admin dashboard** — user management UI, usage/cost stats, API key status per user
 - **Template Claude instructions** — add `[CLAUDE: ...]` markers to actual template .docx and verify they're picked up
 - **Prompt quality iteration** — review first real TIP output and refine prompts
-- **Few-shot injection quality** — current impl grabs 2 most-recent approved docs blindly; no relevance scoring. Options: (a) keyword/category match against draft title + discovery doc content, (b) semantic similarity via pgvector (prerequisite: Phase 2.4 embeddings), (c) allow admin to tag library docs with technology keywords for deterministic matching. Current impl is better than nothing but will inject irrelevant examples when library grows. Revisit once library has 5+ docs.
+- ~~**Few-shot injection quality**~~ ✅ — keyword overlap scoring implemented (draft title + discovery filename vs library title + category); scores logged at generation time
 
 ### Low Priority
 - **Multi-user support** — user management, role-based permissions, draft sharing

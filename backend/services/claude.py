@@ -231,6 +231,26 @@ class ClaudeService:
                 })
                 db.commit()
 
+            # Retrieve RAG chunks for sections in this batch
+            rag_chunks = []
+            if db:
+                try:
+                    from services.embedding import retrieve_relevant_chunks
+                    section_titles = [s.get("title", "") for s in chunk if s.get("title")]
+                    query = f"{draft.title} " + " ".join(section_titles)
+                    for section_title in section_titles:
+                        hits = retrieve_relevant_chunks(query, section_title, db, top_k=2)
+                        for hit in hits:
+                            rag_chunks.append({
+                                "section_title": hit.section_title,
+                                "content": hit.content,
+                                "source": hit.library_doc.title if hit.library_doc else "library",
+                            })
+                    if rag_chunks:
+                        print(f"[generate] RAG injected {len(rag_chunks)} chunks for chunk {chunk_idx + 1}")
+                except Exception as e:
+                    print(f"[generate] RAG retrieval skipped: {e}")
+
             prompt = self._build_chunk_prompt(
                 draft=draft,
                 discovery_text=discovery_text,
@@ -241,6 +261,7 @@ class ClaudeService:
                 total_chunks=total_chunks,
                 library_examples=library_examples,
                 supplemental_texts=supplemental_texts,
+                rag_chunks=rag_chunks or None,
             )
 
             response = self.client.messages.create(
@@ -272,6 +293,7 @@ class ClaudeService:
         total_chunks: int,
         library_examples: Optional[List[Dict[str, str]]] = None,
         supplemental_texts: Optional[List[tuple]] = None,
+        rag_chunks: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Build a prompt for a single chunk of template sections.
@@ -307,6 +329,9 @@ class ClaudeService:
 
         if library_examples:
             parts.append(self._build_examples_block(library_examples))
+
+        if rag_chunks:
+            parts.append(self._build_rag_block(rag_chunks))
 
         parts.append("=== SECTIONS TO GENERATE NOW ===\n\n")
 
@@ -361,6 +386,26 @@ class ClaudeService:
             parts.append(text.strip())
             parts.append("\n\n")
         parts.append("=== END REFERENCE EXAMPLES ===\n\n")
+        return "".join(parts)
+
+    def _build_rag_block(self, rag_chunks: List[Dict[str, str]]) -> str:
+        """
+        Build an authoritative playbook injection block from retrieved section chunks.
+        rag_chunks: list of {"section_title": str, "content": str, "source": str}
+        """
+        if not rag_chunks:
+            return ""
+        parts = [
+            "=== THRIVE PLAYBOOK (AUTHORITATIVE) ===\n"
+            "The following are Thrive's standard processes for this technology area. "
+            "Use them as authoritative content — incorporate their steps, naming, and structure "
+            "into the relevant sections below. Adapt specifics to the customer data.\n\n"
+        ]
+        for chunk in rag_chunks:
+            parts.append(f"--- Playbook: {chunk['section_title']} (from: {chunk['source']}) ---\n")
+            parts.append(chunk["content"].strip())
+            parts.append("\n\n")
+        parts.append("=== END THRIVE PLAYBOOK ===\n\n")
         return "".join(parts)
 
     def _build_prompt(

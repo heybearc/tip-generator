@@ -314,6 +314,26 @@ def approve_doc(
     doc.approved_by = admin.id
     doc.approved_at = datetime.now(timezone.utc)
     db.commit()
+
+    # Trigger chunk embedding in background (non-blocking)
+    import threading
+    from database import get_db as _get_db
+    from services.embedding import chunk_and_embed_library_doc
+
+    def _embed_in_background(doc_id: int):
+        bg_db = next(_get_db())
+        try:
+            bg_doc = bg_db.query(LibraryDocument).filter(LibraryDocument.id == doc_id).first()
+            if bg_doc:
+                n = chunk_and_embed_library_doc(bg_doc, bg_db)
+                print(f"[library] embedded {n} chunks for doc {doc_id}")
+        except Exception as e:
+            print(f"[library] embedding failed for doc {doc_id}: {e}")
+        finally:
+            bg_db.close()
+
+    threading.Thread(target=_embed_in_background, args=(doc.id,), daemon=True).start()
+
     return LibraryApprovalResponse(id=doc.id, status=doc.status.value, approved_at=doc.approved_at)
 
 

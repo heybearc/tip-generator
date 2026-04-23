@@ -11,6 +11,8 @@ PyMuPDF==1.23.26
 
 # AI/ML
 anthropic==0.96.0
+openai==1.57.4
+pgvector==0.3.6
 
 # Database
 psycopg2-binary==2.9.9

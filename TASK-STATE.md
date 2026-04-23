@@ -1,34 +1,29 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-23 (end-of-day — Phase 2.4 multi-document context injection complete)
+**Last updated:** 2026-04-23 (Phase 2.4 validated; few-shot scoring + Excel parser tuned)
 **Current branch:** main
-**Working on:** Post multi-doc testing / quality review
+**Working on:** Phase 2.5 planning / RAG design
 
 ---
 
 ## Current Task
-**Phase 2.4 — Multi-document context injection** — COMPLETE
+**Phase 2.4 — Multi-document context injection** — COMPLETE ✅  
+**Few-shot injection quality** — COMPLETE ✅  
+**Excel parser tuning** — COMPLETE ✅
 
 ### Confirmed Complete
 - ✅ **Phase 2.1** — Admin dashboard
 - ✅ **Phase 2.2** — TIP Library (few-shot injection, RAG-ready schema)
 - ✅ **Phase 2.3** — Draft Collaboration (collaborators table, invite/remove, typeahead search, shared badge)
 - ✅ **v0.6.0** — LIVE=GREEN (CT191, 10.92.3.92) | STANDBY=BLUE (CT190, 10.92.3.91)
-- ✅ **AI Assist removal** — legacy chat panel removed; per-section Refine + custom mode + DocRefinePanel remain
-- ✅ **Pillar template v2** — `tip_template_v2.docx` active (DB ID=3), 18 sections parsed, build script at `docs/build_tip_template.py`
-- ✅ **Prompt caching** — `SYSTEM_PREAMBLE` cached (ephemeral) on all Claude calls
-- ✅ **Pillar-aware generation prompt** — SYSTEM_PREAMBLE updated with Pillar structure, Site Mapping, Open Items, Approximate Timing rules
-- ✅ **Export fix** — export endpoint now loads base .docx from active DB template path
-- ✅ **Phase 2.4** — Multi-document context injection: `draft_documents` junction table, checkbox UI on Generate page, supplemental docs injected as `=== SUPPLEMENTAL DOCUMENT: filename ===` blocks in both single-pass and chunked generation
-- ✅ **[INSTRUCTION:] parser fix** — template parser now extracts v2 template instructions; reparse endpoint added
-- ✅ **Nodes synced** — both tip-blue and tip-green at `23e155e` as of 2026-04-23
+- ✅ **Phase 2.4** — Multi-document context injection validated; 40-page output with 4 docs confirmed correct
+- ✅ **Few-shot scoring** — replaced blind "2 most recent" with keyword overlap scoring (draft title + discovery filename vs library title + category); scores logged at generation time
+- ✅ **Excel parser tuning** — dropdown validation extraction added (`[Options: ...]` hint in output); table row-advance bug fixed; KV threshold relaxed to 4 cells
+- ✅ **Nodes synced** — STANDBY=BLUE deployed at latest commit 2026-04-23
 
 ### Next steps
-1. **Re-test with all 4 docs** — confirm all supplemental docs reach the prompt (bug fixed: duplicate-role spill to supplemental)
-2. **Quality review** — compare multi-doc TIP output (20 pages) vs single-doc (25 pages) — determine if page delta is expected or signals missing content
-3. **Few-shot injection quality** — backlog: category matching, semantic similarity
-4. **Excel parser tuning** — validate against real discovery workbooks (backlog)
-5. **Phase 2.5 TBD** — RAG / semantic library search candidate
+1. **Phase 2.5 design** — RAG / pgvector / section-chunk playbook (see PLAN.md Phase 2.5)
+2. **Update PLAN.md** — mark Phase 2.4 backlog items complete, move 2.5 to Active
 
 ---
 
