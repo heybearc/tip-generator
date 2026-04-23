@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# CELERY_QUEUE isolates blue/green workers — set to "celery-green" on STANDBY container
+CELERY_QUEUE = os.getenv("CELERY_QUEUE", "celery")
 
 celery = Celery(
     "tip_generator",
@@ -25,6 +27,7 @@ celery.conf.update(
     task_acks_late=True,                 # Ack only after task completes (safe retry on crash)
     task_reject_on_worker_lost=True,     # Re-queue if worker dies mid-task
     broker_connection_retry_on_startup=True,
+    task_default_queue=CELERY_QUEUE,
 )
 
 
