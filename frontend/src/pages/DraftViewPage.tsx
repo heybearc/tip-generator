@@ -325,7 +325,7 @@ function DocRefinePanel({ draftId, onApplyAll }: { draftId: number; onApplyAll: 
     setError(null)
     setApplied(false)
     try {
-      const res = await axios.post(`${API_URL}/generate/drafts/${draftId}/refine-all`, { instruction })
+      const res = await axios.post(`${API_URL}/generate/drafts/${draftId}/refine-all`, { instruction }, { timeout: 300000 })
       setPreview(res.data.sections)
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

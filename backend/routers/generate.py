@@ -604,6 +604,19 @@ async def refine_all_sections(
     if not draft.sections:
         raise HTTPException(status_code=400, detail="Draft has no sections to refine")
 
+    # Skip cover-page and structural placeholder sections — they have no real content to refine
+    SKIP_REFINE = {
+        "technical implementation plan", "document end", "template usage guide",
+        "revision history", "table of contents",
+    }
+    sections_to_refine = {
+        k: v for k, v in draft.sections.items()
+        if v and v.strip() and k.strip().lower() not in SKIP_REFINE
+        and not k.strip().lower() == (draft.title or "").strip().lower()
+    }
+    if not sections_to_refine:
+        raise HTTPException(status_code=400, detail="No refinable sections found")
+
     try:
         import anthropic as _anthropic
 
@@ -635,15 +648,14 @@ async def refine_all_sections(
             return key, msg.content[0].text
 
         loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=8) as pool:
             tasks = [
                 loop.run_in_executor(pool, _refine_section, k, v)
-                for k, v in draft.sections.items()
-                if v and v.strip()
+                for k, v in sections_to_refine.items()
             ]
             results = await asyncio.gather(*tasks)
 
-        return {"sections": dict(results), "instruction": instruction}
+        return {"sections": dict(results), "instruction": instruction, "refined_count": len(results)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 
