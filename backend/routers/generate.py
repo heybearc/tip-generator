@@ -555,7 +555,7 @@ Rewrite this section following the rules above."""
         from concurrent.futures import ThreadPoolExecutor
 
         def _call_claude():
-            client = anthropic.Anthropic(api_key=current_user.claude_api_key)
+            client = anthropic.Anthropic(api_key=current_user.claude_api_key, default_headers={"X-Anthropic-Do-Not-Store": "true"})
             message = client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=1500,
@@ -637,7 +637,7 @@ async def refine_all_sections(
         model = current_user.claude_model or "claude-sonnet-4-5"
 
         def _refine_section(key: str, content: str) -> tuple[str, str]:
-            client = _anthropic.Anthropic(api_key=current_user.claude_api_key)
+            client = _anthropic.Anthropic(api_key=current_user.claude_api_key, default_headers={"X-Anthropic-Do-Not-Store": "true"})
             prompt = f"Section: {key}\n\nInstruction: {instruction}\n\nCurrent content:\n{content[:8000]}\n\nApply the instruction above to this section."
             msg = client.messages.create(
                 model=model,

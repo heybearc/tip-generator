@@ -106,7 +106,7 @@ def _suggest_category(
         return None
     try:
         from anthropic import Anthropic
-        client = Anthropic(api_key=api_key)
+        client = Anthropic(api_key=api_key, default_headers={"X-Anthropic-Do-Not-Store": "true"})
         preview = (extracted_text or "")[:3000]
         prompt = (
             "You are categorizing a Technical Implementation Plan (TIP) document for a Managed Service Provider library.\n"
@@ -350,6 +350,90 @@ def reject_doc(
     doc.status = LibraryStatus.REJECTED
     db.commit()
     return LibraryApprovalResponse(id=doc.id, status=doc.status.value, approved_at=doc.approved_at)
+
+
+class PromoteSectionRequest(BaseModel):
+    draft_id: int
+    section_key: str
+    content: str
+    title: Optional[str] = None
+    category: str
+    tags: Optional[List[str]] = None
+
+
+class PromoteSectionResponse(BaseModel):
+    chunk_id: int
+    library_doc_id: int
+    section_title: str
+    category: str
+
+
+@router.post("/chunks/promote", response_model=PromoteSectionResponse)
+def promote_section_to_chunk(
+    body: PromoteSectionRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Promote a draft section directly into library_chunks — admin only.
+    Finds or creates a synthetic LibraryDocument envelope for the given category,
+    then inserts a LibraryChunk. The chunk is immediately available for BM25 RAG retrieval.
+    """
+    from models.library import LibraryChunk
+    from datetime import datetime, timezone
+
+    category = body.category.strip() or "General"
+    envelope_title = f"[Promoted Sections] {category}"
+    section_title = (body.title or body.section_key).strip()
+    tags = body.tags or [category]
+
+    # Find or create the synthetic envelope document for this category
+    envelope = (
+        db.query(LibraryDocument)
+        .filter(
+            LibraryDocument.title == envelope_title,
+            LibraryDocument.status == LibraryStatus.APPROVED,
+        )
+        .first()
+    )
+    if not envelope:
+        envelope = LibraryDocument(
+            title=envelope_title,
+            category=category,
+            category_suggested=False,
+            description="Auto-created envelope for sections promoted from drafts.",
+            filename="_promoted_",
+            original_filename="_promoted_",
+            file_path="_promoted_",
+            file_size=0,
+            mime_type="text/plain",
+            status=LibraryStatus.APPROVED,
+            extracted_text=None,
+            uploaded_by=admin.id,
+            approved_by=admin.id,
+            approved_at=datetime.now(timezone.utc),
+        )
+        db.add(envelope)
+        db.flush()
+
+    chunk = LibraryChunk(
+        library_doc_id=envelope.id,
+        section_title=section_title,
+        section_level=2,
+        content=body.content,
+        embedding_vec=None,
+        tech_tags=tags,
+    )
+    db.add(chunk)
+    db.commit()
+    db.refresh(chunk)
+
+    return PromoteSectionResponse(
+        chunk_id=chunk.id,
+        library_doc_id=envelope.id,
+        section_title=section_title,
+        category=category,
+    )
 
 
 @router.delete("/{doc_id}")

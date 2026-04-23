@@ -4,7 +4,7 @@ import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
-import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus, Layers } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus, Layers, Library } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import TipTapEditor from '../components/TipTapEditor'
 import SectionManager from '../components/SectionManager'
@@ -97,15 +97,25 @@ function SectionEditor({
   content,
   onSave,
   libraryInfluenced,
+  isAdmin,
 }: {
   draftId: number
   sectionKey: string
   content: string
   onSave: (key: string, value: string) => Promise<void>
   libraryInfluenced?: boolean
+  isAdmin?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [promoteOpen, setPromoteOpen] = useState(false)
+  const [promoteTitle, setPromoteTitle] = useState('')
+  const [promoteCategory, setPromoteCategory] = useState('')
+  const [promoteTags, setPromoteTags] = useState('')
+  const [promoting, setPromoting] = useState(false)
+  const [promoteSuccess, setPromoteSuccess] = useState<string | null>(null)
+  const [promoteError, setPromoteError] = useState<string | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
   const [value, setValue] = useState(content)
   const [saving, setSaving] = useState(false)
   const [refineOpen, setRefineOpen] = useState(false)
@@ -150,6 +160,46 @@ function SectionEditor({
     }
   }
 
+  const openPromote = async () => {
+    setPromoteTitle(sectionKey)
+    setPromoteCategory('')
+    setPromoteTags('')
+    setPromoteSuccess(null)
+    setPromoteError(null)
+    setPromoteOpen(true)
+    try {
+      const res = await axios.get(`${API_URL}/library/categories`)
+      setCategories(res.data as string[])
+    } catch {
+      setCategories([])
+    }
+  }
+
+  const handlePromote = async () => {
+    if (!promoteCategory.trim()) {
+      setPromoteError('Category is required.')
+      return
+    }
+    setPromoting(true)
+    setPromoteError(null)
+    try {
+      const tags = promoteTags.split(',').map(t => t.trim()).filter(Boolean)
+      await axios.post(`${API_URL}/library/chunks/promote`, {
+        draft_id: draftId,
+        section_key: sectionKey,
+        content: value || content,
+        title: promoteTitle.trim() || sectionKey,
+        category: promoteCategory.trim(),
+        tags: tags.length ? tags : undefined,
+      })
+      setPromoteSuccess(`"${promoteTitle.trim() || sectionKey}" promoted to library.`)
+    } catch {
+      setPromoteError('Promotion failed. Please try again.')
+    } finally {
+      setPromoting(false)
+    }
+  }
+
   const lines = content.split('\n')
   const preview = lines.slice(0, 3).join(' ').slice(0, 120)
   const wordCount = content.split(/\s+/).filter(Boolean).length
@@ -188,6 +238,15 @@ function SectionEditor({
             >
               <Edit3 className="w-3 h-3" /> Edit
             </button>
+            {isAdmin && (
+              <button
+                onClick={openPromote}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700"
+                title="Promote this section to the TIP Library"
+              >
+                <Library className="w-3 h-3" /> Promote
+              </button>
+            )}
           </div>
         )}
         {editing && (
@@ -208,6 +267,73 @@ function SectionEditor({
           </div>
         )}
       </div>
+
+      {/* Promote to library panel */}
+      {expanded && promoteOpen && !editing && (
+        <div className="border-t bg-purple-50 px-4 py-3" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Library className="w-4 h-4 text-purple-600" />
+              <span className="text-xs font-semibold text-purple-800">Promote to TIP Library</span>
+            </div>
+            <button onClick={() => setPromoteOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>
+          </div>
+          {promoteSuccess ? (
+            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              <CheckCircle className="w-4 h-4" />{promoteSuccess}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs text-gray-600 mb-0.5">Section title in library</label>
+                <input
+                  type="text"
+                  value={promoteTitle}
+                  onChange={e => setPromoteTitle(e.target.value)}
+                  className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-0.5">Category <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={promoteCategory}
+                  onChange={e => setPromoteCategory(e.target.value)}
+                  list="promote-categories"
+                  placeholder="e.g. M365 Migration"
+                  className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+                <datalist id="promote-categories">
+                  {categories.map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-0.5">Tags (comma-separated, optional)</label>
+                <input
+                  type="text"
+                  value={promoteTags}
+                  onChange={e => setPromoteTags(e.target.value)}
+                  placeholder="e.g. Exchange, Hybrid, On-Prem"
+                  className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                />
+              </div>
+              {promoteError && (
+                <div className="text-xs text-red-600">{promoteError}</div>
+              )}
+              <div className="flex justify-end">
+                <button
+                  onClick={handlePromote}
+                  disabled={promoting || !promoteCategory.trim()}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {promoting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Library className="w-3 h-3" />}
+                  {promoting ? 'Promoting…' : 'Add to Library'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Template-guided refine panel */}
       {expanded && refineOpen && !editing && (
@@ -859,6 +985,7 @@ export default function DraftViewPage() {
                 content={value || ''}
                 onSave={handleSaveSection}
                 libraryInfluenced={!!(draft.library_examples_used && draft.library_examples_used.length > 0)}
+                isAdmin={!!(currentUser?.is_superuser)}
               />
             ))
           ) : draft.content ? (
