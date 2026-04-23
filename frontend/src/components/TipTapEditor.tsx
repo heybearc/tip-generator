@@ -59,6 +59,22 @@ td.addRule('taskListItem', {
 })
 td.keep(['table', 'thead', 'tbody', 'tr', 'th', 'td'])
 
+// Preserve text-align on block elements as HTML passthrough
+td.addRule('alignedBlock', {
+  filter: (node) => {
+    const el = node as HTMLElement
+    const tag = el.nodeName
+    const isBlock = ['P', 'H1', 'H2', 'H3', 'H4'].includes(tag)
+    const align = el.style?.textAlign
+    return isBlock && !!align && align !== 'left'
+  },
+  replacement: (content, node) => {
+    const el = node as HTMLElement
+    const align = el.style.textAlign
+    return `\n<p style="text-align:${align}">${content}</p>\n`
+  },
+})
+
 function htmlToMd(html: string): string {
   return td.turndown(html)
 }

@@ -1044,6 +1044,31 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), curren
             i += 1
             continue
 
+        # Aligned paragraph passthrough — <p style="text-align:center|right|justify">
+        align_match = re.match(
+            r'^<p\s+style=["\']text-align:(center|right|justify)["\']>(.*?)</p>$',
+            line.strip(), re.IGNORECASE
+        )
+        if align_match:
+            _break_list()
+            align_val = align_match.group(1).lower()
+            inner = align_match.group(2)
+            p = doc.add_paragraph()
+            set_para_spacing(p, before=0, after=80)
+            add_inline_runs(p, inner, base_size=Pt(10.5))
+            alignment_map = {
+                'center':  WD_ALIGN_PARAGRAPH.CENTER,
+                'right':   WD_ALIGN_PARAGRAPH.RIGHT,
+                'justify': WD_ALIGN_PARAGRAPH.JUSTIFY,
+            }
+            p.paragraph_format.alignment = alignment_map.get(align_val, WD_ALIGN_PARAGRAPH.LEFT)
+            for run in p.runs:
+                run.font.name = 'Calibri'
+                if not run.font.color.type:
+                    run.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+            i += 1
+            continue
+
         # Normal paragraph — 10.5pt Calibri #222 with precise spacing
         _break_list()
         p = doc.add_paragraph()
