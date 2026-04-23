@@ -202,14 +202,17 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
         if draft.scrub_pii:
             try:
                 from services.pii import scrub as pii_scrub
-                import copy
+                import types
 
                 def _scrubbed_doc(doc):
                     if doc is None:
                         return None
-                    clone = copy.copy(doc)
-                    clone.extracted_text = pii_scrub(doc.extracted_text or "", draft.id, db)
-                    return clone
+                    # Use SimpleNamespace so we never touch the SQLAlchemy session
+                    return types.SimpleNamespace(
+                        id=doc.id,
+                        original_filename=getattr(doc, "original_filename", None),
+                        extracted_text=pii_scrub(doc.extracted_text or "", draft.id, db),
+                    )
 
                 discovery_doc = _scrubbed_doc(discovery_doc)
                 service_order_doc = _scrubbed_doc(service_order_doc)
