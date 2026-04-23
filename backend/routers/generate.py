@@ -937,6 +937,9 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), curren
 
     # Strip [INSTRUCTION: ...] blocks (may span multiple lines)
     content = re.sub(r'\[INSTRUCTION:.*?\]', '', draft.content, flags=re.DOTALL)
+    # Strip cover-page H1 ("# Technical Implementation Plan") and its immediate H2 subtitle
+    content = re.sub(r'^# Technical Implementation Plan\s*\n', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^## .+ — .+Technical Implementation Plan\s*\n', '', content, flags=re.MULTILINE)
     # Strip Document Control Notice block (> blockquote lines)
     content = re.sub(r'(?:^> .*\n)+', '', content, flags=re.MULTILINE)
     # Strip standalone DOCUMENT CONTROL NOTICE paragraph

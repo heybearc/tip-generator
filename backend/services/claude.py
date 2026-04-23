@@ -15,6 +15,16 @@ from models.document import Document
 SINGLE_PASS_CHAR_LIMIT = 40_000   # Combined doc text under this → single pass
 SECTION_CHUNK_SIZE = 5            # Sections per chunk in chunked mode
 
+# Sections that are cover-page / structural placeholders — skip entirely from prompt and output
+SKIP_SECTION_TITLES = {
+    "technical implementation plan",
+    "document end",
+    "template usage guide",
+}
+
+# Sections to move to the front of the generated output
+FRONT_SECTIONS = ["executive summary"]
+
 # ── Prompt caching ───────────────────────────────────────────────────────────
 # SYSTEM_PREAMBLE is identical on every generation call — marked cache_control=ephemeral.
 # Anthropic caches this block for up to 5 min, charging ~10% of normal input token price
@@ -195,7 +205,7 @@ class ClaudeService:
         asking only for a subset of sections. Assembles results into one document.
         Writes chunk progress to draft.generation_prompt after each call.
         """
-        sections = template_structure.get("sections", [])
+        raw_sections = template_structure.get("sections", [])
         instructions = template_structure.get("instructions", [])
 
         # Build instruction lookup by section title
@@ -203,6 +213,25 @@ class ClaudeService:
         for inst in instructions:
             sec = inst.get("section", "")
             instruction_map.setdefault(sec, []).append(inst["text"])
+
+        # Filter cover-page/structural placeholder sections
+        sections = [
+            s for s in raw_sections
+            if s.get("title", "").strip().lower() not in SKIP_SECTION_TITLES
+        ]
+
+        # Also skip any H2 whose title matches the draft title (cover-page TIP name heading)
+        draft_title_lower = (draft.title or "").strip().lower()
+        if draft_title_lower:
+            sections = [
+                s for s in sections
+                if not (s.get("level") == 2 and s.get("title", "").strip().lower() == draft_title_lower)
+            ]
+
+        # Reorder: bring FRONT_SECTIONS to the top (after any H1)
+        front = [s for s in sections if s.get("title", "").strip().lower() in FRONT_SECTIONS]
+        rest  = [s for s in sections if s.get("title", "").strip().lower() not in FRONT_SECTIONS]
+        sections = front + rest
 
         # Prepare document text — full text, no truncation per chunk
         discovery_text = self._doc_text(discovery_doc)
@@ -213,17 +242,31 @@ class ClaudeService:
             if d and d.extracted_text
         ]
 
-        # Split sections into chunks
-        chunks = [
-            sections[i:i + SECTION_CHUNK_SIZE]
-            for i in range(0, len(sections), SECTION_CHUNK_SIZE)
+        # Separate appendix sections (H1 Appendix*) from body — they go last
+        body_sections  = [s for s in sections if not s.get("title", "").strip().lower().startswith("appendix")]
+        appendix_sections = [s for s in sections if s.get("title", "").strip().lower().startswith("appendix")]
+
+        # Split body into chunks; appendix sections go in their own final chunk
+        body_chunks = [
+            body_sections[i:i + SECTION_CHUNK_SIZE]
+            for i in range(0, len(body_sections), SECTION_CHUNK_SIZE)
         ]
+
+        # Dedicated pillar chunk injected after body, before appendix
+        pillar_chunk = [{"_pillar_pass": True}]
+
+        chunks = body_chunks + [pillar_chunk]
+        if appendix_sections:
+            chunks += [appendix_sections[i:i + SECTION_CHUNK_SIZE]
+                       for i in range(0, len(appendix_sections), SECTION_CHUNK_SIZE)]
         total_chunks = len(chunks)
 
         all_content_parts: List[str] = []
         total_tokens = 0
 
         for chunk_idx, chunk in enumerate(chunks):
+            is_pillar_pass = len(chunk) == 1 and chunk[0].get("_pillar_pass")
+
             # Write progress before each call so the UI can show it
             if db:
                 draft.generation_prompt = json.dumps({
@@ -235,12 +278,40 @@ class ClaudeService:
                 db.commit()
                 try:
                     from services.audit import log as audit_log
-                    section_titles = [s.get("title", "") for s in chunk if s.get("title")]
+                    section_titles = ["[pillar pass]"] if is_pillar_pass else [s.get("title", "") for s in chunk if s.get("title")]
                     audit_log(db, draft.id, "batch_start", {
                         "sections": section_titles,
                     }, batch_index=chunk_idx + 1, total_batches=total_chunks)
                 except Exception:
                     pass
+
+            # Dedicated pillar generation pass
+            if is_pillar_pass:
+                prompt = self._build_pillar_prompt(
+                    draft=draft,
+                    discovery_text=discovery_text,
+                    service_order_text=service_order_text,
+                    supplemental_texts=supplemental_texts,
+                    library_examples=library_examples,
+                )
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=[{"type": "text", "text": SYSTEM_PREAMBLE, "cache_control": {"type": "ephemeral"}}],
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                chunk_tokens = response.usage.output_tokens
+                all_content_parts.append(response.content[0].text.strip())
+                total_tokens += chunk_tokens
+                if db:
+                    try:
+                        from services.audit import log as audit_log
+                        audit_log(db, draft.id, "claude_call", {
+                            "output_tokens": chunk_tokens, "model": self.model, "pass": "pillars",
+                        }, batch_index=chunk_idx + 1, total_batches=total_chunks)
+                    except Exception:
+                        pass
+                continue
 
             # Retrieve RAG chunks for sections in this batch
             rag_chunks = []
@@ -311,6 +382,53 @@ class ClaudeService:
                     pass
 
         return "\n\n".join(all_content_parts), total_tokens
+
+    def _build_pillar_prompt(
+        self,
+        draft: Draft,
+        discovery_text: str,
+        service_order_text: str,
+        supplemental_texts: Optional[List[tuple]] = None,
+        library_examples: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        """
+        Build a prompt exclusively for generating all Pillar sections.
+        Called as a dedicated pass so pillars are never crowded out by template sections.
+        """
+        parts = []
+        parts.append(
+            "Generate ALL Pillar sections for this TIP based on the source documents below.\n"
+            "Each Pillar covers one technology area from the project scope.\n"
+            "For EACH Pillar output:\n"
+            "  ## Pillar N: [Technology Area]\n"
+            "  ### Preconditions\n"
+            "  - bullet list of hard go/no-go gates\n"
+            "  ### Phase N.1: [Phase Name]\n"
+            "  1. numbered implementation steps in sufficient detail for another engineer\n"
+            "  ### Acceptance Checklist\n"
+            "  - [ ] checkbox items for sign-off\n\n"
+            "Generate as many Pillars as the project scope requires. "
+            "Use ONLY facts from the source documents. "
+            "Where data is missing write [DATA NEEDED: description].\n\n"
+        )
+        if discovery_text:
+            parts.append("=== DISCOVERY WORKSHEET ===\n")
+            parts.append(discovery_text)
+            parts.append("\n\n")
+        if service_order_text:
+            parts.append("=== SERVICE ORDER ===\n")
+            parts.append(service_order_text)
+            parts.append("\n\n")
+        for fname, ftext in (supplemental_texts or []):
+            parts.append(f"=== SUPPLEMENTAL DOCUMENT: {fname} ===\n")
+            parts.append(ftext)
+            parts.append("\n\n")
+        if draft.description:
+            parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
+        if library_examples:
+            parts.append(self._build_examples_block(library_examples))
+        parts.append("Generate ALL Pillar sections now. Output markdown only.\n")
+        return "".join(parts)
 
     def _build_chunk_prompt(
         self,
