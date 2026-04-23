@@ -170,6 +170,7 @@ class ClaudeService:
                     pass
             today_str = date.today().strftime("%B %d, %Y")
             generated_content = self._fix_revision_history(generated_content, author_name, today_str)
+            generated_content = self._post_process_content(generated_content, draft.title)
 
             draft.content = generated_content
             draft.status = DraftStatus.COMPLETED
@@ -252,10 +253,12 @@ class ClaudeService:
             for i in range(0, len(body_sections), SECTION_CHUNK_SIZE)
         ]
 
-        # Dedicated pillar chunk injected after body, before appendix
-        pillar_chunk = [{"_pillar_pass": True}]
+        # Dedicated pillar chunks: 3 pillars per pass, injected after body, before appendix
+        # We don't know the pillar count yet — use 2 passes to cover up to 6 pillars
+        pillar_chunks = [{"_pillar_pass": True, "_pillar_batch": 1, "_pillar_offset": 0},
+                         {"_pillar_pass": True, "_pillar_batch": 2, "_pillar_offset": 3}]
 
-        chunks = body_chunks + [pillar_chunk]
+        chunks = body_chunks + [[p] for p in pillar_chunks]
         if appendix_sections:
             chunks += [appendix_sections[i:i + SECTION_CHUNK_SIZE]
                        for i in range(0, len(appendix_sections), SECTION_CHUNK_SIZE)]
@@ -266,6 +269,8 @@ class ClaudeService:
 
         for chunk_idx, chunk in enumerate(chunks):
             is_pillar_pass = len(chunk) == 1 and chunk[0].get("_pillar_pass")
+            pillar_offset = chunk[0].get("_pillar_offset", 0) if is_pillar_pass else 0
+            pillar_batch  = chunk[0].get("_pillar_batch", 1) if is_pillar_pass else 1
 
             # Write progress before each call so the UI can show it
             if db:
@@ -293,6 +298,8 @@ class ClaudeService:
                     service_order_text=service_order_text,
                     supplemental_texts=supplemental_texts,
                     library_examples=library_examples,
+                    pillar_offset=pillar_offset,
+                    pillar_batch=pillar_batch,
                 )
                 response = self.client.messages.create(
                     model=self.model,
@@ -383,6 +390,26 @@ class ClaudeService:
 
         return "\n\n".join(all_content_parts), total_tokens
 
+    def _post_process_content(self, content: str, draft_title: str) -> str:
+        """
+        Strip cover-page sections and structural placeholders from generated output.
+        Applied to both single-pass and chunked generation results.
+        """
+        import re
+        # Strip H1 cover heading
+        content = re.sub(r'^# Technical Implementation Plan\s*\n', '', content, flags=re.MULTILINE)
+        # Strip H2 TIP-name subtitle (e.g. "## DialConnection LLC — ThriveCloud Migration")
+        if draft_title:
+            escaped = re.escape(draft_title.strip())
+            content = re.sub(rf'^## {escaped}.*\n', '', content, flags=re.MULTILINE)
+        # Strip any H2 that ends with "Technical Implementation Plan" or "— ThriveCloud Migration"
+        content = re.sub(r'^## .+(?:Technical Implementation Plan|ThriveCloud Migration)\s*\n', '', content, flags=re.MULTILINE)
+        # Strip Document End section and everything after
+        content = re.sub(r'^# Document End.*', '', content, flags=re.MULTILINE | re.DOTALL)
+        # Collapse 3+ blank lines
+        content = re.sub(r'\n{3,}', '\n\n', content)
+        return content.strip()
+
     def _build_pillar_prompt(
         self,
         draft: Draft,
@@ -390,24 +417,29 @@ class ClaudeService:
         service_order_text: str,
         supplemental_texts: Optional[List[tuple]] = None,
         library_examples: Optional[List[Dict[str, str]]] = None,
+        pillar_offset: int = 0,
+        pillar_batch: int = 1,
     ) -> str:
         """
-        Build a prompt exclusively for generating all Pillar sections.
-        Called as a dedicated pass so pillars are never crowded out by template sections.
+        Build a prompt for generating 3 Pillar sections (one batch of pillars).
+        pillar_offset: 0 = pillars 1-3, 3 = pillars 4-6.
         """
+        start_num = pillar_offset + 1
+        end_num   = pillar_offset + 3
         parts = []
         parts.append(
-            "Generate ALL Pillar sections for this TIP based on the source documents below.\n"
-            "Each Pillar covers one technology area from the project scope.\n"
-            "For EACH Pillar output:\n"
-            "  ## Pillar N: [Technology Area]\n"
+            f"Generate Pillars {start_num} through {end_num} for this TIP (batch {pillar_batch} of 2).\n"
+            f"Number pillars starting at {start_num}. Each Pillar covers one technology area.\n"
+            "For EACH Pillar output exactly:\n"
+            f"  ## Pillar {start_num}: [Technology Area]\n"
             "  ### Preconditions\n"
             "  - bullet list of hard go/no-go gates\n"
             "  ### Phase N.1: [Phase Name]\n"
-            "  1. numbered implementation steps in sufficient detail for another engineer\n"
-            "  ### Acceptance Checklist\n"
-            "  - [ ] checkbox items for sign-off\n\n"
-            "Generate as many Pillars as the project scope requires. "
+            "  1. numbered implementation steps\n"
+            "  ### Acceptance Checklist — Pillar N\n"
+            "  - [ ] checkbox items\n\n"
+            f"Output ALL THREE pillars ({start_num}, {start_num+1}, {end_num}). "
+            "If fewer than 3 pillars remain in scope, generate only those that apply. "
             "Use ONLY facts from the source documents. "
             "Where data is missing write [DATA NEEDED: description].\n\n"
         )
