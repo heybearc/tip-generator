@@ -179,11 +179,23 @@
 - Invite to collaborate — owner invites specific users by username/email to edit a draft
 - Documents (uploads) globally visible — any user can use any doc as generation source material
 
-### Phase 2.4: RAG Embeddings (when library is populated)
-- pgvector extension on existing Postgres (no new infra)
-- Embed library TIPs on upload via Voyage-3 or equivalent
-- Retrieve top-k relevant chunks at generation time, inject into Claude prompt
-- Prerequisite: Phase 2.2 library must have meaningful content before this adds value
+### Phase 2.5: Playbook — Reusable Chunk Library with RAG
+**Vision (D-LOCAL-021):** Evolve the library from whole-TIP few-shot examples into a **section-chunk playbook**. Thrive's standard processes live as named, tagged chunks injected at section level — so every generated TIP inherits the best-practice Thrive process for that technology.
+
+**Generation pattern stack (target state):**
+1. Constitutional rules — hard Thrive standards as generation constraints
+2. Chunk injection — section-level authoritative content by technology tag ← *this phase*
+3. Few-shot examples — whole-TIP style/format guidance (current)
+4. Discovery documents — project-specific customer data (current)
+
+**Work items:**
+- pgvector extension on existing Postgres (no new infra needed)
+- Embed library docs on upload via Voyage-3 or `text-embedding-3-small`
+- Chunk-level storage: split approved TIPs by section, store with section-type + tech tags
+- Retrieve top-k relevant chunks per section at generation time, inject authoritatively
+- Multi-tag support on library docs (deferred from Phase 2.2 — natural fit here)
+- Admin UI: promote a draft section → library chunk
+- **Prerequisite:** Library must have 10+ approved docs across 3+ categories before retrieval adds signal
 
 ### Phase 3: Advanced Features (Future)
 - AI-powered template suggestions

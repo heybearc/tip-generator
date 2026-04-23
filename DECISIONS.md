@@ -167,6 +167,19 @@ When adding a decision, use this format:
 - **Correction:** Both nodes now at `23e155e`. No rollback needed.
 - **When:** 2026-04-23
 
+## D-LOCAL-021: TIP Library long-term vision — Reusable Chunk Playbook with RAG
+- **Decision:** The TIP Library will evolve toward a **reusable section-chunk playbook** model, not just a whole-TIP few-shot library. Thrive's standard processes (e.g. M365 Migration Phase 2, Apple MDM Enrollment) will be stored as named, tagged chunks that can be injected at section level during generation — producing a best-practice TIP every time.
+- **Why:** Thrive Principal Architect team wants authoritative, repeatable process content — not just style examples. The distinction: few-shot teaches *how to write*; chunk injection delivers *what the answer is*. Over time the library becomes a living playbook that improves with every approved TIP.
+- **Generation pattern stack (in priority order):**
+  1. **Constitutional rules** — hard Thrive standards injected as constraints (Phase 3)
+  2. **Chunk injection** — section-level authoritative content matched by technology tag (Phase 2.5)
+  3. **Few-shot examples** — whole-TIP style/format guidance (current, Phase 2.2)
+  4. **Discovery documents** — project-specific customer data (current)
+- **Why single-category is correct now:** Library has <10 docs. Retrieval is by category string, not semantics. Multi-category adds schema complexity before the library has enough content to benefit. Revisit when library has 20+ docs or RAG is implemented.
+- **Multi-category deferred to Phase 2.5:** When pgvector embeddings replace category-string matching, tags become richer and multi-tag is natural. Building it now into a string-based system would be thrown away.
+- **Current library role:** Seed corpus — every approved doc is future chunk source material. Tag quality and admin curation now directly improve Phase 2.5 retrieval quality later.
+- **When:** 2026-04-23
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.
