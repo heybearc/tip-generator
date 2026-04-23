@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Table } from '@tiptap/extension-table'
@@ -13,8 +13,29 @@ import type { MarkedOptions } from 'marked'
 import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, TableIcon, Undo2, Redo2,
-  CheckSquare, Minus,
+  CheckSquare, Minus, ChevronDown,
 } from 'lucide-react'
+
+// ── Structured table templates (Thrive TIP standard) ───────────────────────
+const TABLE_TEMPLATES = [
+  {
+    label: 'Blank table (3×3)',
+    html: null,  // use insertTable command
+    rows: 3, cols: 3,
+  },
+  {
+    label: 'Risks & Contingencies',
+    html: `<table><thead><tr><th>Risk</th><th>Likelihood</th><th>Mitigation Strategy</th><th>Rollback Plan</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table>`,
+  },
+  {
+    label: 'Acceptance Criteria',
+    html: `<table><thead><tr><th>#</th><th>Acceptance Criterion</th><th>Verification Method</th></tr></thead><tbody><tr><td>1</td><td></td><td></td></tr><tr><td>2</td><td></td><td></td></tr></tbody></table>`,
+  },
+  {
+    label: 'Deliverables',
+    html: `<table><thead><tr><th>#</th><th>Deliverable</th><th>Description</th><th>Expected Date</th></tr></thead><tbody><tr><td>1</td><td></td><td></td><td></td></tr><tr><td>2</td><td></td><td></td><td></td></tr></tbody></table>`,
+  },
+]
 
 // ── markdown → HTML (for loading into TipTap) ──────────────────────────────
 function mdToHtml(md: string): string {
@@ -77,7 +98,7 @@ export default function TipTapEditor({ value, onChange }: Props) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Table.configure({ resizable: false }),
+      Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
@@ -99,10 +120,36 @@ export default function TipTapEditor({ value, onChange }: Props) {
     }
   }, [value, editor])
 
+  const [tableMenuOpen, setTableMenuOpen] = useState(false)
+  const tableMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close table dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tableMenuRef.current && !tableMenuRef.current.contains(e.target as Node)) {
+        setTableMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   if (!editor) return null
 
-  const insertTable = () =>
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+  const insertTableTemplate = (tpl: typeof TABLE_TEMPLATES[number]) => {
+    setTableMenuOpen(false)
+    if (tpl.html) {
+      editor.chain().focus().insertContent(tpl.html).run()
+    } else {
+      editor.chain().focus().insertTable({ rows: tpl.rows ?? 3, cols: tpl.cols ?? 3, withHeaderRow: true }).run()
+    }
+  }
+
+  const confirmDelete = (action: () => void, label: string) => {
+    if (window.confirm(`Delete this ${label}? This cannot be undone — use Undo (Ctrl+Z) to recover if needed.`)) {
+      action()
+    }
+  }
 
   return (
     <div className="border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
@@ -141,19 +188,43 @@ export default function TipTapEditor({ value, onChange }: Props) {
 
         <span className="w-px h-5 bg-gray-200 mx-1" />
 
-        <Btn onClick={insertTable} title="Insert table">
-          <TableIcon className="w-4 h-4" />
-        </Btn>
+        {/* Table insert dropdown */}
+        <div className="relative" ref={tableMenuRef}>
+          <button
+            type="button"
+            onMouseDown={e => { e.preventDefault(); setTableMenuOpen(o => !o) }}
+            title="Insert table"
+            className="flex items-center gap-0.5 p-1.5 rounded text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <TableIcon className="w-4 h-4" />
+            <ChevronDown className="w-3 h-3" />
+          </button>
+          {tableMenuOpen && (
+            <div className="absolute left-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[210px]">
+              {TABLE_TEMPLATES.map(tpl => (
+                <button
+                  key={tpl.label}
+                  type="button"
+                  onMouseDown={e => { e.preventDefault(); insertTableTemplate(tpl) }}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 text-gray-700"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
           <Minus className="w-4 h-4" />
         </Btn>
 
         <span className="w-px h-5 bg-gray-200 mx-1" />
 
-        <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo">
+        <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
           <Undo2 className="w-4 h-4" />
         </Btn>
-        <Btn onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo">
+        <Btn onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)">
           <Redo2 className="w-4 h-4" />
         </Btn>
 
@@ -164,8 +235,16 @@ export default function TipTapEditor({ value, onChange }: Props) {
             <span className="text-xs text-gray-500 mr-1">Table:</span>
             <button type="button" onMouseDown={e => { e.preventDefault(); editor.chain().focus().addColumnAfter().run() }} className="text-xs px-2 py-1 rounded hover:bg-gray-100 text-gray-600">+Col</button>
             <button type="button" onMouseDown={e => { e.preventDefault(); editor.chain().focus().addRowAfter().run() }} className="text-xs px-2 py-1 rounded hover:bg-gray-100 text-gray-600">+Row</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteColumn().run() }} className="text-xs px-2 py-1 rounded hover:bg-gray-100 text-red-500">-Col</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); editor.chain().focus().deleteRow().run() }} className="text-xs px-2 py-1 rounded hover:bg-gray-100 text-red-500">-Row</button>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); confirmDelete(() => editor.chain().focus().deleteColumn().run(), 'column') }}
+              className="text-xs px-2 py-1 rounded hover:bg-red-50 text-red-500"
+            >-Col</button>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); confirmDelete(() => editor.chain().focus().deleteRow().run(), 'row') }}
+              className="text-xs px-2 py-1 rounded hover:bg-red-50 text-red-500"
+            >-Row</button>
           </>
         )}
       </div>
