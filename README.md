@@ -28,6 +28,8 @@ The generated draft is editable in-browser, then exported as a fully-formatted `
 | Draft management & inline editing | ✅ |
 | Word + PDF export | ✅ |
 | TIP Library with few-shot injection | ✅ |
+| Library document title & category editing (admin) | ✅ |
+| Document type reclassification | ✅ |
 | AI-suggested document categories | ✅ |
 | Shared documents (available to all users) | ✅ |
 | Role-based access control (admin / user) | ✅ |
