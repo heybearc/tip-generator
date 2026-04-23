@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import TipTapEditor from '../components/TipTapEditor'
 
 const API_URL = '/api'
 
@@ -296,12 +297,7 @@ function SectionEditor({
       {expanded && (
         <div className="p-4 bg-white">
           {editing ? (
-            <textarea
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              className="w-full min-h-[200px] p-3 font-mono text-sm border rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
-            />
+            <TipTapEditor value={value} onChange={setValue} />
           ) : (
             <div className="prose-tip">
               <MarkdownView content={content} />
