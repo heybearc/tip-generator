@@ -1,14 +1,15 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-23 (Phase 2.5 RAG complete; BM25 retrieval, 193 chunks indexed)
+**Last updated:** 2026-04-23 (v0.9.0 released — PII pseudonymization, RAG chunks, data privacy)
 **Current branch:** main
-**Working on:** Security — customer data privacy / Claude API data handling
+**Working on:** Idle — v0.9.0 live
 
 ---
 
 ## Current Task
 **Phase 2.5 — RAG / Section-Chunk Playbook** — COMPLETE ✅  
-**Security: Customer Data Privacy** — ⚠️ OPEN — needs decision + implementation
+**Security: Customer Data Privacy** — COMPLETE ✅ (`do_not_store` header, PII pseudonymization, `SECURITY.md`)
+**v0.9.0** — LIVE ✅
 
 ### Confirmed Complete
 - ✅ **Phase 2.1** — Admin dashboard
@@ -19,12 +20,12 @@
 - ✅ **Few-shot scoring** — replaced blind "2 most recent" with keyword overlap scoring (draft title + discovery filename vs library title + category); scores logged at generation time
 - ✅ **Excel parser tuning** — dropdown validation extraction added (`[Options: ...]` hint in output); table row-advance bug fixed; KV threshold relaxed to 4 cells
 - ✅ **Phase 2.5 RAG** — pgvector + `library_chunks` table; BM25 retrieval (no external API); 193 chunks indexed from 11 approved library docs; chunks injected at generation time per section; MCP deploy fixed to use venv pip
-- ✅ **STANDBY=BLUE** deployed and healthy at latest commit
+- ✅ **v0.9.0 RELEASED** — LIVE=BLUE (CT190, 10.92.3.91) | STANDBY=GREEN (CT191, 10.92.3.92) | 56/56 tests passing
 
 ### Next steps
-1. **⚠️ Security: Customer data privacy** — customer data (discovery worksheets, service orders) sent to Anthropic Claude API; need policy decision + implementation (see Security section below)
-2. **Admin UI: promote section → chunk** — allow admin to manually promote a draft section to a library chunk (Phase 2.5 backlog)
-3. **Phase 2.5 → LIVE** — test RAG injection on a real TIP generation, then `/release`
+1. **Verify PII quality on real TIP** — generate a test TIP with scrub toggle enabled; confirm output is correct after restore
+2. **Admin UI: promote section → chunk** — allow admin to manually promote a draft section to library chunk (Phase 2.5 backlog)
+3. **PII scrub → always-on** — after quality verified, flip default to `True` in `DraftCreate` schema
 
 ---
 
