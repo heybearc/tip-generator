@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -34,44 +37,47 @@ interface Gap {
 }
 
 
-// Parse inline markdown tokens into React nodes
-function parseInline(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
-  return parts.map((part, pi) => {
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
-      return <strong key={pi}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2)
-      return <em key={pi}>{part.slice(1, -1)}</em>
-    if (part.startsWith('`') && part.endsWith('`') && part.length > 2)
-      return <code key={pi} className="bg-gray-100 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
-    return part
-  })
+const BRAND = '#143F6A'
+
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+  h1: ({ children }) => <h1 className="text-base font-bold mt-6 mb-1 pb-1 border-b-2" style={{ color: BRAND, borderColor: BRAND }}>{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold mt-4 mb-1 pb-0.5 border-b" style={{ color: BRAND, borderColor: BRAND }}>{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold mt-3 mb-1" style={{ color: BRAND }}>{children}</h3>,
+  h4: ({ children }) => <h4 className="text-sm font-semibold mt-2 mb-1 text-gray-700">{children}</h4>,
+  p:  ({ children }) => <p className="text-sm mb-1 text-gray-800 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-5 mb-2 space-y-0.5 text-sm text-gray-800">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-5 mb-2 space-y-0.5 text-sm text-gray-800">{children}</ol>,
+  li: ({ children }) => <li className="text-sm text-gray-800">{children}</li>,
+  blockquote: ({ children }) => <blockquote className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: BRAND, color: BRAND }}>{children}</blockquote>,
+  hr: () => <hr className="my-3" style={{ borderColor: BRAND }} />,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em>{children}</em>,
+  code: ({ children }) => <code className="bg-gray-100 px-1 rounded text-xs font-mono">{children}</code>,
+  pre: ({ children }) => <pre className="bg-gray-100 rounded p-2 overflow-x-auto text-xs font-mono my-2">{children}</pre>,
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-3">
+      <table className="w-full text-sm border-collapse border" style={{ borderColor: '#d1d5db' }}>{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead style={{ backgroundColor: BRAND }}>{children}</thead>,
+  th: ({ children }) => <th className="px-3 py-1.5 text-left text-xs font-semibold text-white border" style={{ borderColor: '#1e5489' }}>{children}</th>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children, ...props }) => {
+    const isEven = (props as { 'data-row-index'?: number })?.['data-row-index'] !== undefined
+    return <tr className={isEven ? 'bg-gray-50' : 'bg-white'} style={{ borderBottom: '1px solid #e5e7eb' }}>{children}</tr>
+  },
+  td: ({ children }) => <td className="px-3 py-1.5 text-sm text-gray-800 border" style={{ borderColor: '#e5e7eb' }}>{children}</td>,
 }
 
-// Render a single line of markdown into JSX
-function renderLine(line: string, key: number) {
-  if (line.startsWith('# '))
-    return <h1 key={key} className="text-base font-bold mt-6 mb-1 pb-1 border-b-2" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{parseInline(line.slice(2))}</h1>
-  if (line.startsWith('## '))
-    return <h2 key={key} className="text-sm font-bold mt-4 mb-1 pb-0.5 border-b" style={{ color: '#143F6A', borderColor: '#143F6A' }}>{parseInline(line.slice(3))}</h2>
-  if (line.startsWith('### '))
-    return <h3 key={key} className="text-sm font-semibold mt-3 mb-1" style={{ color: '#143E69' }}>{parseInline(line.slice(4))}</h3>
-  if (line.startsWith('> '))
-    return <blockquote key={key} className="border-l-4 pl-3 my-1 italic text-sm" style={{ borderColor: '#143F6A', color: '#143F6A' }}>{parseInline(line.slice(2))}</blockquote>
-  if (line.startsWith('- [ ] ') || line.startsWith('[ ] '))
-    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4"><span className="mt-0.5">☐</span><span>{parseInline(line.replace(/^[-\s]*\[\s\]\s*/, ''))}</span></div>
-  if (line.startsWith('- [x] ') || line.startsWith('[x] '))
-    return <div key={key} className="flex items-start gap-2 text-sm my-0.5 ml-4 text-gray-500"><span className="mt-0.5">☑</span><span className="line-through">{parseInline(line.replace(/^[-\s]*\[x\]\s*/, ''))}</span></div>
-  if (line.startsWith('- ') || line.startsWith('* '))
-    return <li key={key} className="ml-5 text-sm mb-0.5 text-gray-800">{parseInline(line.slice(2))}</li>
-  if (line.trim() === '---' || line.trim() === '***')
-    return <hr key={key} className="my-3" style={{ borderColor: '#143F6A' }} />
-  if (line.trim() === '')
-    return <div key={key} className="h-2" />
+function MarkdownView({ content }: { content: string }) {
   return (
-    <p key={key} className="text-sm mb-1 text-gray-800 leading-relaxed">
-      {parseInline(line)}
-    </p>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeSanitize]}
+      components={mdComponents}
+    >
+      {content}
+    </ReactMarkdown>
   )
 }
 
@@ -298,7 +304,7 @@ function SectionEditor({
             />
           ) : (
             <div className="prose-tip">
-              {content.split('\n').map((line, i) => renderLine(line, i))}
+              <MarkdownView content={content} />
             </div>
           )}
         </div>
@@ -840,7 +846,7 @@ export default function DraftViewPage() {
             ))
           ) : draft.content ? (
             <div className="bg-white rounded-xl border shadow-sm p-6">
-              {draft.content.split('\n').map((line, i) => renderLine(line, i))}
+              <MarkdownView content={draft.content} />
             </div>
           ) : (
             <div className="flex items-center justify-center py-20 text-gray-400">
