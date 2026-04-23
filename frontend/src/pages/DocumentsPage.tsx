@@ -41,6 +41,20 @@ export default function DocumentsPage() {
     }
   }
 
+  const handleTypeChange = async (id: number, newType: string) => {
+    try {
+      const response = await axios.patch(
+        `/api/documents/${id}/type`,
+        { document_type: newType },
+        { withCredentials: true }
+      )
+      setDocuments(prev => prev.map(d => d.id === id ? { ...d, document_type: response.data.document_type } : d))
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to update document type')
+      setTimeout(() => setError(null), 5000)
+    }
+  }
+
   const handleDelete = async (id: number, filename: string) => {
     if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
       return
@@ -185,9 +199,16 @@ export default function DocumentsPage() {
                         <h3 className="font-semibold text-lg truncate">
                           {doc.original_filename}
                         </h3>
-                        <span className={`text-xs px-2 py-1 rounded ${getDocumentTypeColor(doc.document_type)}`}>
-                          {getDocumentTypeLabel(doc.document_type)}
-                        </span>
+                        <select
+                          value={doc.document_type}
+                          onChange={(e) => handleTypeChange(doc.id, e.target.value)}
+                          className={`text-xs px-2 py-1 rounded border-0 cursor-pointer font-medium focus:ring-1 focus:ring-blue-400 ${getDocumentTypeColor(doc.document_type)}`}
+                          title="Change document type"
+                        >
+                          <option value="discovery_excel">Discovery Worksheet</option>
+                          <option value="service_order_pdf">Service Order</option>
+                          <option value="other">Other</option>
+                        </select>
                         {doc.user_id === SHARED_USER_ID && (
                           <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">
                             Shared

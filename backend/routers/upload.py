@@ -211,6 +211,31 @@ async def get_document(
         raise HTTPException(status_code=404, detail="Document not found")
     return document
 
+@router.patch("/documents/{document_id}/type")
+async def update_document_type(
+    document_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Update the document_type of an uploaded document.
+    """
+    from models.document import Document
+    new_type = body.get("document_type")
+    if new_type not in [t.value for t in DocumentType]:
+        raise HTTPException(status_code=400, detail=f"Invalid document_type. Must be one of: {[t.value for t in DocumentType]}")
+
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document.document_type = DocumentType(new_type)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: int,
