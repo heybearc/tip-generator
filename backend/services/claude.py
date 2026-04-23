@@ -259,6 +259,12 @@ class ClaudeService:
         total_tokens = 0
 
         for chunk_idx, chunk in enumerate(chunks):
+            # Check if draft was cancelled between chunks — bail out cleanly
+            if db:
+                db.refresh(draft)
+                if draft.status == DraftStatus.FAILED:
+                    raise Exception("Generation cancelled by user")
+
             is_pillar_pass = len(chunk) == 1 and chunk[0].get("_pillar_pass")
             pillar_offset = chunk[0].get("_pillar_offset", 0) if is_pillar_pass else 0
             pillar_batch  = chunk[0].get("_pillar_batch", 1) if is_pillar_pass else 1

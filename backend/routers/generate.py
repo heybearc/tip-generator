@@ -278,10 +278,17 @@ async def cancel_draft(
     draft = _get_draft_owned(db, draft_id, current_user)
     if draft.status != DraftStatus.GENERATING:
         raise HTTPException(status_code=400, detail="Draft is not currently generating")
+    # Revoke task on all workers — stops it before next chunk boundary
     if draft.celery_task_id:
-        celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM")
+        try:
+            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
+        except Exception:
+            pass
+    # Mark failed immediately so the running task self-terminates at next chunk check
     draft.status = DraftStatus.FAILED
+    draft.content = "Generation cancelled by user."
     draft.celery_task_id = None
+    draft.generation_prompt = None
     db.commit()
     return {"message": "Generation cancelled", "id": draft_id}
 
