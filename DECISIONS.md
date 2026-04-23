@@ -151,6 +151,22 @@ When adding a decision, use this format:
 - **When:** 2026-04-22
 - **Alternative:** Parallel `ThreadPoolExecutor` calls with prompt caching achieves cost efficiency without latency penalty.
 
+## D-LOCAL-019: Multi-document context injection (Phase 2.4)
+- **Decision:** Attach N documents (any mix of Excel/PDF/other) to a draft via `draft_documents` junction table. Existing `discovery_document_id` and `service_order_document_id` FK columns preserved for backwards compat. Supplemental docs injected into Claude prompt as `=== SUPPLEMENTAL DOCUMENT: filename ===` blocks after discovery/service order, in both single-pass and chunked generation.
+- **Why:** Customers provide multiple source documents (protection lists, runbooks, scoping PDFs). All must reach Claude for accurate TIP generation.
+- **When:** 2026-04-23
+- **UI:** Generate page replaced two dropdowns with checkbox list. Auto-assigns roles (xlsx→discovery, pdf→service_order, other→supplemental). Duplicate-role extras spill to supplemental. Role overridable per doc via inline dropdown.
+- **Schema:** `draft_documents(id, draft_id, document_id, role, position, created_at)` — migration 007.
+- **Alternatives considered:** Upload-at-generation-time inline (rejected: pre-upload library is already in place and more flexible)
+
+## D-LOCAL-020: VIOLATION — Deployed directly to LIVE (GREEN) during Phase 2.4 hotfix (2026-04-23)
+- **Violation:** During multi-select bug fixing, Cascade ran `npm run build && systemctl restart` directly on tip-green (LIVE) instead of routing through STANDBY first.
+- **What happened:** The multi-select fix commit `23e155e` was pulled and built on GREEN (LIVE) directly to resolve a user-facing bug mid-test. BLUE (STANDBY) was synced afterward via MCP deploy.
+- **Correct procedure:** Deploy fix to STANDBY → test → release → sync.
+- **Mitigating factor:** User was actively testing on GREEN at the time; fix was a pure frontend-only change with no backend/DB risk.
+- **Correction:** Both nodes now at `23e155e`. No rollback needed.
+- **When:** 2026-04-23
+
 ## D-LOCAL-009: JWT HttpOnly cookie for session management
 - **Decision:** Store authentication session as a JWT in an HttpOnly, SameSite=Lax cookie (`tip_session`), not localStorage or a Bearer token in headers.
 - **Why:** HttpOnly prevents XSS-based token theft. SameSite=Lax prevents most CSRF attacks. Avoids storing secrets in JavaScript-accessible storage. Cookie is automatically sent with all same-origin requests.

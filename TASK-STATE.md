@@ -1,13 +1,13 @@
 # TIP Generator Task State
 
-**Last updated:** 2026-04-22 (mid-day — template v2 + prompt caching deployed to LIVE)
+**Last updated:** 2026-04-23 (end-of-day — Phase 2.4 multi-document context injection complete)
 **Current branch:** main
-**Working on:** Post-template testing / Phase 2.4 TBD
+**Working on:** Post multi-doc testing / quality review
 
 ---
 
 ## Current Task
-**Test new Pillar-based template with a real generation run**
+**Phase 2.4 — Multi-document context injection** — COMPLETE
 
 ### Confirmed Complete
 - ✅ **Phase 2.1** — Admin dashboard
@@ -19,12 +19,16 @@
 - ✅ **Prompt caching** — `SYSTEM_PREAMBLE` cached (ephemeral) on all Claude calls
 - ✅ **Pillar-aware generation prompt** — SYSTEM_PREAMBLE updated with Pillar structure, Site Mapping, Open Items, Approximate Timing rules
 - ✅ **Export fix** — export endpoint now loads base .docx from active DB template path
+- ✅ **Phase 2.4** — Multi-document context injection: `draft_documents` junction table, checkbox UI on Generate page, supplemental docs injected as `=== SUPPLEMENTAL DOCUMENT: filename ===` blocks in both single-pass and chunked generation
+- ✅ **[INSTRUCTION:] parser fix** — template parser now extracts v2 template instructions; reparse endpoint added
+- ✅ **Nodes synced** — both tip-blue and tip-green at `23e155e` as of 2026-04-23
 
 ### Next steps
-1. **Generate a test TIP** with the new v2 template to validate Pillar output quality
-2. **Phase 2.4** — TBD (Context Injection candidate — upload doc to enrich existing draft)
+1. **Re-test with all 4 docs** — confirm all supplemental docs reach the prompt (bug fixed: duplicate-role spill to supplemental)
+2. **Quality review** — compare multi-doc TIP output (20 pages) vs single-doc (25 pages) — determine if page delta is expected or signals missing content
 3. **Few-shot injection quality** — backlog: category matching, semantic similarity
 4. **Excel parser tuning** — validate against real discovery workbooks (backlog)
+5. **Phase 2.5 TBD** — RAG / semantic library search candidate
 
 ---
 
