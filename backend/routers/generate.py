@@ -641,6 +641,54 @@ async def refine_all_sections(
         raise HTTPException(status_code=500, detail=f"Refinement failed: {str(e)}")
 
 
+@router.get("/drafts/{draft_id}/section-order")
+async def get_section_order(draft_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    """Return section order and visibility for a draft. Auto-initialises from draft.sections if not yet saved."""
+    from models.draft_section_order import DraftSectionOrder
+    draft = _get_draft_readable(db, draft_id, current_user)
+    rows = db.query(DraftSectionOrder).filter(DraftSectionOrder.draft_id == draft_id).order_by(DraftSectionOrder.position).all()
+    if not rows and draft.sections:
+        # Bootstrap from current sections order
+        rows = []
+        for pos, key in enumerate(draft.sections.keys()):
+            row = DraftSectionOrder(draft_id=draft_id, section_key=key, position=pos, visible=True)
+            db.add(row)
+            rows.append(row)
+        db.commit()
+    return [{"key": r.section_key, "position": r.position, "visible": r.visible} for r in rows]
+
+
+@router.post("/drafts/{draft_id}/section-order")
+async def save_section_order(draft_id: int, body: dict, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    """
+    Save section order and visibility for a draft.
+    Body: { sections: [{ key: string, position: number, visible: boolean }] }
+    """
+    from models.draft_section_order import DraftSectionOrder
+    _get_draft_readable(db, draft_id, current_user)
+    sections = body.get("sections", [])
+    for item in sections:
+        key = item.get("key")
+        if not key:
+            continue
+        row = db.query(DraftSectionOrder).filter(
+            DraftSectionOrder.draft_id == draft_id,
+            DraftSectionOrder.section_key == key
+        ).first()
+        if row:
+            row.position = item.get("position", row.position)
+            row.visible  = item.get("visible", row.visible)
+        else:
+            db.add(DraftSectionOrder(
+                draft_id=draft_id,
+                section_key=key,
+                position=item.get("position", 0),
+                visible=item.get("visible", True),
+            ))
+    db.commit()
+    return {"saved": True, "count": len(sections)}
+
+
 @router.get("/drafts/{draft_id}/export")
 async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """Export a completed draft as a formatted Word (.docx) document."""
@@ -935,8 +983,35 @@ async def export_draft_docx(draft_id: int, db: Session = Depends(get_db), curren
                         r.font.name = 'Calibri'
                         r.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
 
+    # Apply section order / visibility if saved — rebuild content from ordered visible sections
+    if draft.sections:
+        try:
+            from models.draft_section_order import DraftSectionOrder
+            order_rows = db.query(DraftSectionOrder).filter(
+                DraftSectionOrder.draft_id == draft.id
+            ).order_by(DraftSectionOrder.position).all()
+            if order_rows:
+                visible_keys = [r.section_key for r in order_rows if r.visible]
+                ordered_content_parts = []
+                for key in visible_keys:
+                    val = draft.sections.get(key, "")
+                    if val and val.strip():
+                        level = 1 if not any(c.isalpha() and c.islower() for c in key[:3]) else 2
+                        # Use heading level from content if detectable
+                        ordered_content_parts.append(f"## {key}\n\n{val}")
+                if ordered_content_parts:
+                    content = "\n\n".join(ordered_content_parts)
+                else:
+                    content = draft.content or ""
+            else:
+                content = draft.content or ""
+        except Exception:
+            content = draft.content or ""
+    else:
+        content = draft.content or ""
+
     # Strip [INSTRUCTION: ...] blocks (may span multiple lines)
-    content = re.sub(r'\[INSTRUCTION:.*?\]', '', draft.content, flags=re.DOTALL)
+    content = re.sub(r'\[INSTRUCTION:.*?\]', '', content, flags=re.DOTALL)
     # Strip cover-page H1 ("# Technical Implementation Plan") and its immediate H2 subtitle
     content = re.sub(r'^# Technical Implementation Plan\s*\n', '', content, flags=re.MULTILINE)
     content = re.sub(r'^## .+ — .+Technical Implementation Plan\s*\n', '', content, flags=re.MULTILINE)

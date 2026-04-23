@@ -4,9 +4,10 @@ import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
-import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus, Layers } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import TipTapEditor from '../components/TipTapEditor'
+import SectionManager from '../components/SectionManager'
 
 const API_URL = '/api'
 
@@ -419,6 +420,7 @@ export default function DraftViewPage() {
 
   // Collaborators
   const [collabOpen, setCollabOpen] = useState(false)
+  const [sectionManagerOpen, setSectionManagerOpen] = useState(false)
   const [collaborators, setCollaborators] = useState<Collaborator[]>([])
   const [collabLoading, setCollabLoading] = useState(false)
   const [inviteUsername, setInviteUsername] = useState('')
@@ -681,6 +683,18 @@ export default function DraftViewPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {draft.status === 'completed' && draft.sections && Object.keys(draft.sections).length > 0 && (
+            <button
+              onClick={() => setSectionManagerOpen(!sectionManagerOpen)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                sectionManagerOpen ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+              title="Manage section order and visibility"
+            >
+              <Layers className="w-4 h-4" />
+              Sections
+            </button>
+          )}
           <button
             onClick={() => setCollabOpen(!collabOpen)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
@@ -724,6 +738,13 @@ export default function DraftViewPage() {
           </div>
         </div>
       </div>
+
+      {sectionManagerOpen && draft.sections && (
+        <SectionManager
+          draftId={draft.id}
+          onClose={() => setSectionManagerOpen(false)}
+        />
+      )}
 
       {collabOpen && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
