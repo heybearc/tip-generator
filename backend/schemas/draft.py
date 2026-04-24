@@ -14,7 +14,7 @@ class DraftCreate(BaseModel):
     service_order_document_id: Optional[int] = None
     supplemental_document_ids: Optional[List[int]] = None
     template_id: Optional[int] = None
-    scrub_pii: bool = False
+    scrub_pii: bool = True
     additional_instructions: Optional[str] = None
 
 class DraftResponse(BaseModel):

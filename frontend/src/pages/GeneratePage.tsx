@@ -40,7 +40,7 @@ export default function GeneratePage() {
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  const [scrubPii, setScrubPii] = useState(false)
+  const [scrubPii, setScrubPii] = useState(true)
   const [additionalInstructions, setAdditionalInstructions] = useState('')
   const [presets, setPresets] = useState<{ label: string; text: string }[]>([])
   const [savingPreset, setSavingPreset] = useState(false)

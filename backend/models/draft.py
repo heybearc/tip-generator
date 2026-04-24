@@ -69,7 +69,7 @@ class Draft(Base):
     generation_tokens = Column(Integer, nullable=True)
     celery_task_id = Column(String, nullable=True)
     library_examples_used = Column(JSON, nullable=True)  # [{title, category}] injected at generation time
-    scrub_pii = Column(Boolean, nullable=False, default=False)
+    scrub_pii = Column(Boolean, nullable=False, default=True)
     additional_instructions = Column(Text, nullable=True)
     
     # Timestamps
