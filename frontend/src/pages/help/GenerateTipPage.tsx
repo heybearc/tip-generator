@@ -24,10 +24,39 @@ export default function GenerateTipPage() {
               <li>Go to <strong>Generate</strong> in the navigation bar.</li>
               <li>Enter a descriptive <strong>TIP title</strong> (e.g. "ClientName — Cloud Migration v1.0").</li>
               <li>Optionally add a description with any special context for the AI.</li>
+              <li>Optionally add <strong>Author Instructions</strong> to guide Claude's writing style (see below).</li>
               <li>Select a <strong>Discovery Document</strong> (your Excel workbook) from the dropdown.</li>
               <li>Optionally select a <strong>Service Order</strong> (PDF).</li>
               <li>Click <strong>Generate TIP</strong>.</li>
             </ol>
+          ),
+        },
+        {
+          title: 'Author Instructions & Presets',
+          content: (
+            <>
+              <p>The <strong>Author Instructions</strong> field lets you give Claude specific writing guidance before generation starts. This is useful for controlling tone, depth, and style across the entire document.</p>
+              <div className="mt-3 space-y-2">
+                <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                  <p className="font-medium text-gray-700 mb-1">Example instructions:</p>
+                  <ul className="list-disc ml-4 space-y-1 text-gray-600">
+                    <li>"Write at a high-level architecture level, not step-by-step engineering."</li>
+                    <li>"Assume the reader is a project manager, not a network engineer."</li>
+                    <li>"Be concise — no section should exceed 3 paragraphs."</li>
+                    <li>"Use Thrive's voice: professional, direct, and client-facing."</li>
+                  </ul>
+                </div>
+              </div>
+              <p className="mt-3"><strong>Saving as a Preset:</strong> If you use the same instructions for every TIP, save them as a preset so you don't have to retype them:</p>
+              <ol className="list-decimal ml-4 space-y-1 mt-2 text-sm">
+                <li>Type your instructions in the Author Instructions field.</li>
+                <li>Click <strong>Save as preset</strong> and give it a name.</li>
+                <li>Next time, click any saved preset to load it instantly.</li>
+              </ol>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                <strong>Tip:</strong> Presets are saved to your profile and persist across sessions. You can save multiple presets for different client types or document styles.
+              </div>
+            </>
           ),
         },
         {
@@ -84,6 +113,10 @@ export default function GenerateTipPage() {
               <div>
                 <p className="font-medium text-gray-800">Can I generate without a discovery document?</p>
                 <p className="text-gray-600 mt-0.5">Yes, but quality will be lower. Without a discovery workbook the AI only has the service order and template structure to work from.</p>
+              </div>
+              <div>
+                <p className="font-medium text-gray-800">Can I stop a generation that's already running?</p>
+                <p className="text-gray-600 mt-0.5">Yes — go to the Drafts page and click <strong>Cancel</strong> on the generating draft. The job stops immediately and the draft moves to "cancelled" status with whatever content was completed up to that point.</p>
               </div>
             </div>
           ),

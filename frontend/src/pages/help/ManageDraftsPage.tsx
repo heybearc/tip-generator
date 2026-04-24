@@ -19,9 +19,10 @@ export default function ManageDraftsPage() {
           content: (
             <div className="space-y-2">
               {[
-                { status: 'generating', color: 'bg-blue-100 text-blue-800', desc: 'Generation is in progress. The Generate page will show live progress.' },
-                { status: 'completed', color: 'bg-green-100 text-green-800', desc: 'Generation finished successfully. Ready to view and export.' },
+                { status: 'generating', color: 'bg-blue-100 text-blue-800', desc: 'Generation is in progress. A Cancel button appears on the Drafts page — click it to stop the job.' },
+                { status: 'completed', color: 'bg-green-100 text-green-800', desc: 'Generation finished successfully. Ready to view, edit, and export.' },
                 { status: 'failed', color: 'bg-red-100 text-red-800', desc: 'Generation encountered an error. The draft may have partial content.' },
+                { status: 'cancelled', color: 'bg-orange-100 text-orange-700', desc: 'You stopped a generation in progress. The draft may have partial content up to the point of cancellation.' },
               ].map(s => (
                 <div key={s.status} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium mt-0.5 ${s.color}`}>{s.status}</span>
@@ -56,6 +57,41 @@ export default function ManageDraftsPage() {
               <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
                 <strong>Tip:</strong> Use this to remove auto-generated cover sections (like "Technical Implementation Plan") or to move the Executive Summary to the top before delivering to a client.
               </div>
+            </>
+          ),
+        },
+        {
+          title: 'Filling in [DATA NEEDED] Fields',
+          content: (
+            <>
+              <p>After generation, some fields may contain <code className="bg-orange-50 border border-orange-200 px-1 rounded text-xs text-orange-800">[DATA NEEDED: ...]</code> markers. These appear when the source documents didn't have enough information for the AI to fill in a specific value — for example, a project manager name, an IP address, or a go-live date.</p>
+              <p className="mt-2">You can fill these in directly inside TIP Generator without going back to Claude:</p>
+              <ol className="list-decimal ml-4 space-y-2 mt-3">
+                <li>Open a completed draft. If any <code className="bg-orange-50 border border-orange-200 px-1 rounded text-xs text-orange-800">[DATA NEEDED]</code> fields exist, an orange <strong>Fill (N)</strong> button appears in the toolbar — the number shows how many unique fields were found.</li>
+                <li>Click <strong>Fill (N)</strong> to open the panel.</li>
+                <li>Enter values for each field you know. Leave blank any you don't have yet — those will be skipped.</li>
+                <li>Click <strong>Apply All</strong>. Every section of the draft is updated instantly and saved.</li>
+              </ol>
+              <div className="mt-3 p-3 bg-orange-50 border border-orange-100 rounded-lg text-sm text-orange-800">
+                <strong>Tip:</strong> Run Fill multiple times as you gather information. The button count will decrease each time you successfully replace a field across all sections.
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                <strong>Note:</strong> This is a simple find-and-replace — it does not send content to Claude. It's instant and works on the saved sections directly.
+              </div>
+            </>
+          ),
+        },
+        {
+          title: 'Cancelling a Generation',
+          content: (
+            <>
+              <p>If a generation is taking too long or was started by mistake, you can stop it:</p>
+              <ol className="list-decimal ml-4 space-y-2 mt-2">
+                <li>Go to the <strong>Drafts</strong> page.</li>
+                <li>Find the draft with the blue <strong>generating</strong> status badge.</li>
+                <li>Click the <strong>Cancel</strong> button on the right side of the card.</li>
+              </ol>
+              <p className="mt-2">The draft will move to <strong>cancelled</strong> status (orange badge). Any content generated up to that point is preserved and the draft remains accessible.</p>
             </>
           ),
         },
@@ -95,7 +131,7 @@ export default function ManageDraftsPage() {
             <div className="space-y-3">
               <div>
                 <p className="font-medium text-gray-800">Can I delete a draft?</p>
-                <p className="text-gray-600 mt-0.5">Draft deletion is on the roadmap but not yet available. For now, drafts accumulate and can be browsed by date.</p>
+                <p className="text-gray-600 mt-0.5">Yes — open the draft and use the delete option, or click the trash icon on the Drafts page. Deletion is permanent and cannot be undone.</p>
               </div>
               <div>
                 <p className="font-medium text-gray-800">Can I re-generate a draft?</p>
