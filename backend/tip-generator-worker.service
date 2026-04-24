@@ -8,8 +8,9 @@ User=root
 WorkingDirectory=/opt/tip-generator/backend
 Environment="PATH=/opt/tip-generator/backend/venv/bin"
 Environment="PYTHONPATH=/opt/tip-generator/backend"
-ExecStart=/opt/tip-generator/backend/venv/bin/celery -A celery_app worker --loglevel=info --concurrency=2 -n tip-worker@%%h
-KillSignal=SIGTERM
+EnvironmentFile=/opt/tip-generator/backend/.env
+ExecStart=/opt/tip-generator/backend/venv/bin/celery -A celery_app worker --loglevel=info --pool=threads --concurrency=3 -n tip-worker@%%h
+KillSignal=SIGKILL
 TimeoutStopSec=600
 Restart=always
 RestartSec=15

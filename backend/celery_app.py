@@ -23,9 +23,9 @@ celery.conf.update(
     result_serializer="json",
     accept_content=["json"],
     task_track_started=True,
-    worker_prefetch_multiplier=1,        # One task at a time per worker
+    worker_prefetch_multiplier=1,        # One task queued per thread slot — no over-fetching
     task_acks_late=True,                 # Ack only after task completes (safe retry on crash)
-    task_reject_on_worker_lost=True,     # Re-queue if worker dies mid-task
+    # task_reject_on_worker_lost omitted — incompatible with SIGKILL termination
     broker_connection_retry_on_startup=True,
     task_default_queue=CELERY_QUEUE,
 )
