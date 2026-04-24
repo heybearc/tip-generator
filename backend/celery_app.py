@@ -224,6 +224,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 audit_log(db, draft.id, "pii_scrub", {"tokens_replaced": token_count})
             except Exception as e:
                 print(f"[generate_tip_task] PII scrub failed, continuing without scrub: {e}")
+                db.rollback()
                 audit_log(db, draft.id, "pii_scrub", {"error": str(e), "skipped": True})
 
         claude = ClaudeService(api_key=user.claude_api_key, model=user.claude_model or None)
@@ -268,6 +269,7 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
         countdown = RETRY_BACKOFF[attempt] if attempt < len(RETRY_BACKOFF) else RETRY_BACKOFF[-1]
 
         try:
+            db.rollback()
             draft = db.query(Draft).filter(Draft.id == draft_id).first()
             if draft:
                 if retryable:
