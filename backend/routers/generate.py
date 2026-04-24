@@ -279,10 +279,10 @@ async def cancel_draft(
     draft = _get_draft_owned(db, draft_id, current_user)
     if draft.status != DraftStatus.GENERATING:
         raise HTTPException(status_code=400, detail="Draft is not currently generating")
-    # Revoke task on all workers — stops it before next chunk boundary
+    # Revoke task on all workers — SIGKILL for immediate termination
     if draft.celery_task_id:
         try:
-            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
+            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGKILL", reply=False)
         except Exception:
             pass
     # Mark failed immediately so the running task self-terminates at next chunk check
@@ -305,7 +305,7 @@ async def delete_draft(
     if draft.celery_task_id and draft.status == DraftStatus.GENERATING:
         try:
             from celery_app import celery
-            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
+            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGKILL", reply=False)
         except Exception:
             pass
     db.delete(draft)

@@ -47,10 +47,18 @@ def recover_orphaned_drafts(sender, **kwargs):
             if orphans:
                 print(f"[startup] Found {len(orphans)} orphaned generating draft(s) — re-queuing...")
                 for draft in orphans:
-                    draft.status = DraftStatus.GENERATING  # keep status, reset progress
+                    # Revoke the old task if we have its ID — prevents duplicate runs
+                    if draft.celery_task_id:
+                        try:
+                            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
+                        except Exception:
+                            pass
                     draft.generation_prompt = None
+                    draft.celery_task_id = None
                     db.commit()
-                    generate_tip_task.delay(draft.id, draft.template_file_id)
+                    task = generate_tip_task.delay(draft.id, draft.template_file_id)
+                    draft.celery_task_id = task.id
+                    db.commit()
                     print(f"[startup] Re-queued draft {draft.id}: {draft.title}")
         finally:
             db.close()
