@@ -4,7 +4,7 @@ import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
-import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus, Layers, Library } from 'lucide-react'
+import { ArrowLeft, Edit3, Save, X, Loader2, CheckCircle, AlertCircle, Download, ChevronDown, ChevronRight, Sparkles, BookOpen, Pencil, Check, ClipboardList, Users, UserPlus, UserMinus, Layers, Library, Replace } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import TipTapEditor from '../components/TipTapEditor'
 import SectionManager from '../components/SectionManager'
@@ -561,6 +561,12 @@ export default function DraftViewPage() {
   const [gaps, setGaps] = useState<Gap[] | null>(null)
   const [gapsLoading, setGapsLoading] = useState(false)
 
+  // Find & Replace [DATA NEEDED]
+  const [replaceOpen, setReplaceOpen] = useState(false)
+  const [replaceValues, setReplaceValues] = useState<Record<string, string>>({})
+  const [replaceSaving, setReplaceSaving] = useState(false)
+  const [replaceCount, setReplaceCount] = useState<number | null>(null)
+
   useEffect(() => { loadDraft() }, [id])
   useEffect(() => {
     if (collabOpen && id) loadCollaborators()
@@ -685,6 +691,57 @@ export default function DraftViewPage() {
       ...prev,
       sections: { ...(prev.sections || {}), ...sections }
     } : prev)
+  }
+
+  // Scan all sections for [DATA NEEDED: ...] patterns, deduplicated by label
+  const dataNeededFields = (() => {
+    if (!draft?.sections) return []
+    const seen = new Set<string>()
+    const fields: { label: string; pattern: string }[] = []
+    const re = /\[DATA NEEDED:\s*([^\]]+)\]/gi
+    for (const content of Object.values(draft.sections)) {
+      let m
+      re.lastIndex = 0
+      while ((m = re.exec(content)) !== null) {
+        const label = m[1].trim()
+        const pattern = m[0]
+        if (!seen.has(label.toLowerCase())) {
+          seen.add(label.toLowerCase())
+          fields.push({ label, pattern })
+        }
+      }
+    }
+    return fields
+  })()
+
+  const handleApplyReplacements = async () => {
+    if (!draft?.sections) return
+    setReplaceSaving(true)
+    let totalReplaced = 0
+    const updatedSections = { ...draft.sections }
+    for (const [key, content] of Object.entries(updatedSections)) {
+      let updated = content
+      for (const { label, pattern } of dataNeededFields) {
+        const val = replaceValues[label.toLowerCase()]
+        if (val?.trim()) {
+          const re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+          const before = updated
+          updated = updated.replace(re, val.trim())
+          if (updated !== before) totalReplaced++
+        }
+      }
+      if (updated !== content) {
+        updatedSections[key] = updated
+        await axios.patch(
+          `${API_URL}/generate/drafts/${draft.id}/sections/section`,
+          { key, content: updated }
+        )
+      }
+    }
+    setDraft(prev => prev ? { ...prev, sections: updatedSections } : prev)
+    setReplaceCount(totalReplaced)
+    setReplaceValues({})
+    setReplaceSaving(false)
   }
 
   const handleSaveSection = async (sectionKey: string, content: string) => {
@@ -831,6 +888,18 @@ export default function DraftViewPage() {
             <Users className="w-4 h-4" />
             {collaborators.length > 0 ? collaborators.length : ''}
           </button>
+          {draft.status === 'completed' && draft.sections && dataNeededFields.length > 0 && (
+            <button
+              onClick={() => { setReplaceOpen(!replaceOpen); setReplaceCount(null) }}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                replaceOpen ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50 hover:border-orange-400 hover:text-orange-700'
+              }`}
+              title="Fill in [DATA NEEDED] fields"
+            >
+              <Replace className="w-4 h-4" />
+              Fill ({dataNeededFields.length})
+            </button>
+          )}
           {draft.status === 'completed' && (
             <button
               onClick={toggleGaps}
@@ -864,6 +933,55 @@ export default function DraftViewPage() {
           </div>
         </div>
       </div>
+
+      {replaceOpen && dataNeededFields.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Replace className="w-4 h-4 text-orange-600" />
+              <span className="font-semibold text-sm text-orange-800">Fill [DATA NEEDED] Fields</span>
+              <span className="text-xs text-orange-600">{dataNeededFields.length} unique field{dataNeededFields.length !== 1 ? 's' : ''} found across all sections</span>
+            </div>
+            <button onClick={() => setReplaceOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+            {dataNeededFields.map(({ label }) => (
+              <div key={label}>
+                <label className="block text-xs font-medium text-gray-700 mb-0.5 capitalize">{label}</label>
+                <input
+                  type="text"
+                  value={replaceValues[label.toLowerCase()] ?? ''}
+                  onChange={e => setReplaceValues(prev => ({ ...prev, [label.toLowerCase()]: e.target.value }))}
+                  placeholder={`Enter ${label}…`}
+                  className="w-full text-sm border border-orange-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white"
+                />
+              </div>
+            ))}
+          </div>
+          {replaceCount !== null && (
+            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
+              <CheckCircle className="w-4 h-4" />
+              Applied {replaceCount} replacement{replaceCount !== 1 ? 's' : ''} across all sections.
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setReplaceValues({}); setReplaceCount(null) }}
+              className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleApplyReplacements}
+              disabled={replaceSaving || Object.values(replaceValues).every(v => !v?.trim())}
+              className="flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {replaceSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Replace className="w-3 h-3" />}
+              {replaceSaving ? 'Applying…' : 'Apply All'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {sectionManagerOpen && draft.sections && (
         <SectionManager
