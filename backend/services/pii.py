@@ -16,21 +16,27 @@ from sqlalchemy.orm import Session
 # ---------------------------------------------------------------------------
 _analyzer = None
 _anonymizer = None
+_engine_lock = None
 
 
 def _get_engines():
-    global _analyzer, _anonymizer
+    global _analyzer, _anonymizer, _engine_lock
+    import threading
+    if _engine_lock is None:
+        _engine_lock = threading.Lock()
     if _analyzer is None:
-        from presidio_analyzer import AnalyzerEngine
-        from presidio_analyzer.nlp_engine import NlpEngineProvider
-        from presidio_anonymizer import AnonymizerEngine
+        with _engine_lock:
+            if _analyzer is None:  # double-checked locking
+                from presidio_analyzer import AnalyzerEngine
+                from presidio_analyzer.nlp_engine import NlpEngineProvider
+                from presidio_anonymizer import AnonymizerEngine
 
-        provider = NlpEngineProvider(nlp_configuration={
-            "nlp_engine_name": "spacy",
-            "models": [{"lang_code": "en", "model_name": "en_core_web_lg"}],
-        })
-        _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
-        _anonymizer = AnonymizerEngine()
+                provider = NlpEngineProvider(nlp_configuration={
+                    "nlp_engine_name": "spacy",
+                    "models": [{"lang_code": "en", "model_name": "en_core_web_lg"}],
+                })
+                _analyzer = AnalyzerEngine(nlp_engine=provider.create_engine())
+                _anonymizer = AnonymizerEngine()
     return _analyzer, _anonymizer
 
 
