@@ -454,6 +454,9 @@ class ClaudeService:
             parts.append("\n\n")
         if draft.description:
             parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
+        if getattr(draft, "additional_instructions", None):
+            parts.append(f"=== AUTHOR INSTRUCTIONS ===\n{draft.additional_instructions}\n"
+                         "Apply these instructions when writing every Pillar section.\n\n")
         if library_examples:
             parts.append(self._build_examples_block(library_examples))
         parts.append("Generate ALL Pillar sections now. Output markdown only.\n")
@@ -503,6 +506,10 @@ class ClaudeService:
 
         if draft.description:
             parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
+
+        if getattr(draft, "additional_instructions", None):
+            parts.append(f"=== AUTHOR INSTRUCTIONS ===\n{draft.additional_instructions}\n"
+                         "Apply these instructions when writing these sections.\n\n")
 
         if library_examples:
             parts.append(self._build_examples_block(library_examples))
@@ -624,6 +631,10 @@ class ClaudeService:
 
         if draft.description:
             parts.append(f"=== ADDITIONAL CONTEXT ===\n{draft.description}\n\n")
+
+        if getattr(draft, "additional_instructions", None):
+            parts.append(f"=== AUTHOR INSTRUCTIONS ===\n{draft.additional_instructions}\n"
+                         "Apply these instructions when writing every section of this TIP.\n\n")
 
         if not discovery_doc and not service_order_doc:
             parts.append(

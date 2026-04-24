@@ -69,6 +69,7 @@ class Draft(Base):
     celery_task_id = Column(String, nullable=True)
     library_examples_used = Column(JSON, nullable=True)  # [{title, category}] injected at generation time
     scrub_pii = Column(Boolean, nullable=False, default=False)
+    additional_instructions = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

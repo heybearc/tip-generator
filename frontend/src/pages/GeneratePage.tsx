@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, XCircle, ShieldCheck } from 'lucide-react'
+import { Wand2, FileText, AlertCircle, CheckCircle, Loader2, XCircle, ShieldCheck, BookMarked, Plus, Trash2 } from 'lucide-react'
 
 const API_URL = '/api'
 
@@ -41,6 +41,11 @@ export default function GeneratePage() {
   const [generating, setGenerating] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [scrubPii, setScrubPii] = useState(false)
+  const [additionalInstructions, setAdditionalInstructions] = useState('')
+  const [presets, setPresets] = useState<{ label: string; text: string }[]>([])
+  const [savingPreset, setSavingPreset] = useState(false)
+  const [newPresetLabel, setNewPresetLabel] = useState('')
+  const [showSavePreset, setShowSavePreset] = useState(false)
   const [progress, setProgress] = useState<ProgressState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -48,7 +53,37 @@ export default function GeneratePage() {
   useEffect(() => {
     loadDocuments()
     loadCurrentTemplate()
+    loadPresets()
   }, [])
+
+  const loadPresets = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/auth/profile`)
+      setPresets(res.data.instruction_presets || [])
+    } catch {
+      // silent
+    }
+  }
+
+  const savePreset = async () => {
+    if (!newPresetLabel.trim() || !additionalInstructions.trim()) return
+    setSavingPreset(true)
+    try {
+      const updated = [...presets, { label: newPresetLabel.trim(), text: additionalInstructions.trim() }]
+      await axios.patch(`${API_URL}/auth/profile`, { instruction_presets: updated })
+      setPresets(updated)
+      setNewPresetLabel('')
+      setShowSavePreset(false)
+    } finally {
+      setSavingPreset(false)
+    }
+  }
+
+  const deletePreset = async (idx: number) => {
+    const updated = presets.filter((_, i) => i !== idx)
+    await axios.patch(`${API_URL}/auth/profile`, { instruction_presets: updated })
+    setPresets(updated)
+  }
 
   const loadDocuments = async () => {
     try {
@@ -123,6 +158,7 @@ export default function GeneratePage() {
         service_order_document_id: serviceOrderDocId,
         supplemental_document_ids: supplementalDocIds.length ? supplementalDocIds : null,
         scrub_pii: scrubPii,
+        additional_instructions: additionalInstructions.trim() || null,
       })
       const draftId = createRes.data.id
 
@@ -231,9 +267,80 @@ export default function GeneratePage() {
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Any additional notes or context for Claude..."
-            rows={3}
+            rows={2}
             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
+        </div>
+
+        {/* Author Instructions */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              <BookMarked className="w-3.5 h-3.5 inline-block mr-1 text-purple-500" />
+              Author Instructions <span className="text-gray-400">(optional)</span>
+            </label>
+            {presets.length > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-400">Presets:</span>
+                {presets.map((p, i) => (
+                  <div key={i} className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setAdditionalInstructions(p.text)}
+                      className="text-xs px-2 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100"
+                    >{p.label}</button>
+                    <button
+                      type="button"
+                      onClick={() => deletePreset(i)}
+                      className="ml-0.5 text-gray-300 hover:text-red-400"
+                      title="Delete preset"
+                    ><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <textarea
+            value={additionalInstructions}
+            onChange={e => setAdditionalInstructions(e.target.value)}
+            placeholder="e.g. Write at a high-level architecture level, not step-by-step engineering. Assume the reader is a project manager."
+            rows={3}
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+          />
+          {additionalInstructions.trim() && (
+            <div className="mt-1">
+              {!showSavePreset ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSavePreset(true)}
+                  className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800"
+                >
+                  <Plus className="w-3 h-3" /> Save as preset
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPresetLabel}
+                    onChange={e => setNewPresetLabel(e.target.value)}
+                    placeholder="Preset name (e.g. High-Level Architecture)"
+                    className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={savePreset}
+                    disabled={savingPreset || !newPresetLabel.trim()}
+                    className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  >{savingPreset ? 'Saving…' : 'Save'}</button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSavePreset(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >Cancel</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div>

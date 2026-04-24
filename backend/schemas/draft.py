@@ -15,6 +15,7 @@ class DraftCreate(BaseModel):
     supplemental_document_ids: Optional[List[int]] = None
     template_id: Optional[int] = None
     scrub_pii: bool = False
+    additional_instructions: Optional[str] = None
 
 class DraftResponse(BaseModel):
     """Schema for draft response"""
@@ -31,6 +32,7 @@ class DraftResponse(BaseModel):
     library_examples_used: Optional[list] = None
     collaborator_count: Optional[int] = None  # populated by endpoint, not a DB column
     scrub_pii: Optional[bool] = False
+    additional_instructions: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     generated_at: Optional[datetime] = None

@@ -207,11 +207,15 @@ def generate_tip_task(self, draft_id: int, template_file_id: int | None):
                 def _scrubbed_doc(doc):
                     if doc is None:
                         return None
-                    # Use SimpleNamespace so we never touch the SQLAlchemy session
+                    # Eagerly read all attributes before pii_scrub touches the session,
+                    # preventing lazy-load failures on a mid-transaction session.
+                    doc_id = doc.id
+                    doc_filename = getattr(doc, "original_filename", None)
+                    doc_text = doc.extracted_text or ""
                     return types.SimpleNamespace(
-                        id=doc.id,
-                        original_filename=getattr(doc, "original_filename", None),
-                        extracted_text=pii_scrub(doc.extracted_text or "", draft.id, db),
+                        id=doc_id,
+                        original_filename=doc_filename,
+                        extracted_text=pii_scrub(doc_text, draft.id, db),
                     )
 
                 discovery_doc = _scrubbed_doc(discovery_doc)

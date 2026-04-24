@@ -239,6 +239,7 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         "full_name": current_user.full_name,
         "has_claude_api_key": bool(current_user.claude_api_key),
         "claude_model": current_user.claude_model,
+        "instruction_presets": current_user.instruction_presets or [],
     }
 
 
@@ -273,7 +274,7 @@ async def update_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update user profile. Accepts: claude_api_key (set or clear), full_name, claude_model."""
+    """Update user profile. Accepts: claude_api_key (set or clear), full_name, claude_model, instruction_presets."""
     if "claude_api_key" in body:
         key = body["claude_api_key"]
         current_user.claude_api_key = key.strip() if key else None
@@ -281,6 +282,10 @@ async def update_profile(
         current_user.full_name = body["full_name"]
     if "claude_model" in body:
         current_user.claude_model = body["claude_model"] or None
+    if "instruction_presets" in body:
+        presets = body["instruction_presets"]
+        if isinstance(presets, list):
+            current_user.instruction_presets = presets
     db.commit()
     db.refresh(current_user)
     return {
@@ -290,6 +295,7 @@ async def update_profile(
         "full_name": current_user.full_name,
         "has_claude_api_key": bool(current_user.claude_api_key),
         "claude_model": current_user.claude_model,
+        "instruction_presets": current_user.instruction_presets or [],
     }
 
 

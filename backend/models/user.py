@@ -2,6 +2,7 @@
 User model for authentication and authorization
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from database.config import Base
 
@@ -19,6 +20,7 @@ class User(Base):
     oauth_id = Column(String, nullable=True)
     claude_api_key = Column(String, nullable=True)  # User's personal Anthropic API key
     claude_model = Column(String, nullable=True)    # User's preferred Claude model (e.g. claude-opus-4-5)
+    instruction_presets = Column(JSONB, nullable=True, default=list)  # [{"label": "...", "text": "..."}]
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
