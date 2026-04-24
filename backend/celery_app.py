@@ -37,25 +37,38 @@ def recover_orphaned_drafts(sender, **kwargs):
     On worker startup, find any drafts stuck in 'generating' state and re-queue them.
     This handles the case where the worker was restarted mid-generation.
     Runs once per worker process startup.
+
+    Grace window: skip drafts updated within the last 10 minutes — those belong to a
+    task that is still alive (e.g. a rolling deployment restarted the worker while a
+    thread-pool task was mid-flight on another thread/process).
     """
     try:
+        from datetime import datetime, timezone, timedelta
         from database import SessionLocal
         from models.draft import Draft, DraftStatus
         db = SessionLocal()
+        GRACE = timedelta(minutes=10)
+        now = datetime.now(timezone.utc)
         try:
-            orphans = db.query(Draft).filter(
+            candidates = db.query(Draft).filter(
                 Draft.status == DraftStatus.GENERATING,
                 Draft.celery_task_id != None,  # noqa: E711 — skip already-cleared cancellations
             ).all()
+            orphans = [
+                d for d in candidates
+                if d.updated_at is None or (now - d.updated_at.replace(tzinfo=timezone.utc)) > GRACE
+            ]
+            skipped = len(candidates) - len(orphans)
+            if skipped:
+                print(f"[startup] Skipping {skipped} recently-active generating draft(s) — likely still running")
             if orphans:
                 print(f"[startup] Found {len(orphans)} orphaned generating draft(s) — re-queuing...")
                 for draft in orphans:
-                    # Revoke the old task if we have its ID — prevents duplicate runs
-                    if draft.celery_task_id:
-                        try:
-                            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
-                        except Exception:
-                            pass
+                    # Revoke the old task to prevent duplicate runs if it somehow survived
+                    try:
+                        celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGKILL", reply=False)
+                    except Exception:
+                        pass
                     draft.generation_prompt = None
                     draft.celery_task_id = None
                     db.commit()
