@@ -285,8 +285,8 @@ async def cancel_draft(
             celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGKILL", reply=False)
         except Exception:
             pass
-    # Mark failed immediately so the running task self-terminates at next chunk check
-    draft.status = DraftStatus.FAILED
+    # Mark cancelled immediately so the running task self-terminates at next chunk check
+    draft.status = DraftStatus.CANCELLED
     draft.content = "Generation cancelled by user."
     draft.celery_task_id = None
     draft.generation_prompt = None

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy, Users, StopCircle } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy, Users, StopCircle, Ban } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const API_URL = '/api'
@@ -103,7 +103,7 @@ export default function DraftsPage() {
     setCancellingId(draftId)
     try {
       await axios.post(`${API_URL}/generate/drafts/${draftId}/cancel`)
-      setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, status: 'failed', generation_prompt: null } : d))
+      setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, status: 'cancelled', generation_prompt: null } : d))
     } catch {
       setError('Cancel failed')
     } finally {
@@ -135,6 +135,7 @@ export default function DraftsPage() {
   const statusIcon = (status: string) => {
     if (status === 'completed') return <CheckCircle className="w-4 h-4 text-green-500" />
     if (status === 'failed') return <XCircle className="w-4 h-4 text-red-500" />
+    if (status === 'cancelled') return <Ban className="w-4 h-4 text-orange-400" />
     if (status === 'generating') return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
     return <Clock className="w-4 h-4 text-gray-400" />
   }
@@ -142,6 +143,7 @@ export default function DraftsPage() {
   const statusClass = (status: string) => {
     if (status === 'completed') return 'bg-green-100 text-green-700'
     if (status === 'failed') return 'bg-red-100 text-red-700'
+    if (status === 'cancelled') return 'bg-orange-100 text-orange-600'
     if (status === 'generating') return 'bg-blue-100 text-blue-700'
     return 'bg-gray-100 text-gray-600'
   }

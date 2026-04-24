@@ -41,6 +41,7 @@ class DraftStatus(str, enum.Enum):
     GENERATING = "generating"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
     ARCHIVED = "archived"
 
 class Draft(Base):

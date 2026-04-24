@@ -262,7 +262,7 @@ class ClaudeService:
             # Check if draft was cancelled between chunks — bail out cleanly
             if db:
                 db.refresh(draft)
-                if draft.status == DraftStatus.FAILED:
+                if draft.status in (DraftStatus.FAILED, DraftStatus.CANCELLED):
                     raise Exception("Generation cancelled by user")
 
             is_pillar_pass = len(chunk) == 1 and chunk[0].get("_pillar_pass")

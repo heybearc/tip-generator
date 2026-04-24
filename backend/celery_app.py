@@ -43,7 +43,10 @@ def recover_orphaned_drafts(sender, **kwargs):
         from models.draft import Draft, DraftStatus
         db = SessionLocal()
         try:
-            orphans = db.query(Draft).filter(Draft.status == DraftStatus.GENERATING).all()
+            orphans = db.query(Draft).filter(
+                Draft.status == DraftStatus.GENERATING,
+                Draft.celery_task_id != None,  # noqa: E711 — skip already-cleared cancellations
+            ).all()
             if orphans:
                 print(f"[startup] Found {len(orphans)} orphaned generating draft(s) — re-queuing...")
                 for draft in orphans:
