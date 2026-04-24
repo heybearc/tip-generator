@@ -301,6 +301,13 @@ async def delete_draft(
     current_user: UserModel = Depends(get_current_user),
 ):
     draft = _get_draft_owned(db, draft_id, current_user)
+    # Revoke any running Celery task before deleting to stop token burn
+    if draft.celery_task_id and draft.status == DraftStatus.GENERATING:
+        try:
+            from celery_app import celery
+            celery.control.revoke(draft.celery_task_id, terminate=True, signal="SIGTERM", reply=False)
+        except Exception:
+            pass
     db.delete(draft)
     db.commit()
     return {"message": "Draft deleted", "id": draft_id}

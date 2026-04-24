@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy, Users } from 'lucide-react'
+import { FolderOpen, Wand2, Loader2, AlertCircle, Clock, CheckCircle, XCircle, Trash2, Pencil, Check, X, Copy, Users, StopCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const API_URL = '/api'
@@ -43,6 +43,7 @@ export default function DraftsPage() {
   const [error, setError] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [cancellingId, setCancellingId] = useState<number | null>(null)
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -95,6 +96,20 @@ export default function DraftsPage() {
   }
 
   const cancelRename = () => { setRenamingId(null); setRenameValue('') }
+
+  const handleCancel = async (e: { stopPropagation: () => void }, draftId: number) => {
+    e.stopPropagation()
+    if (cancellingId === draftId) return
+    setCancellingId(draftId)
+    try {
+      await axios.post(`${API_URL}/generate/drafts/${draftId}/cancel`)
+      setDrafts(prev => prev.map(d => d.id === draftId ? { ...d, status: 'failed', generation_prompt: null } : d))
+    } catch {
+      setError('Cancel failed')
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   const handleDelete = async (e: { stopPropagation: () => void }, draftId: number) => {
     e.stopPropagation()
@@ -238,7 +253,20 @@ export default function DraftsPage() {
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass(draft.status)}`}>
                   {draft.status}
                 </span>
-                {renamingId !== draft.id && currentUser && draft.user_id === currentUser.id && (
+                {draft.status === 'generating' && currentUser && draft.user_id === currentUser.id && (
+                  <button
+                    onClick={e => handleCancel(e, draft.id)}
+                    disabled={cancellingId === draft.id}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    title="Cancel generation"
+                  >
+                    {cancellingId === draft.id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <StopCircle className="w-3 h-3" />}
+                    Cancel
+                  </button>
+                )}
+                {renamingId !== draft.id && draft.status !== 'generating' && currentUser && draft.user_id === currentUser.id && (
                   <button
                     onClick={e => startRename(e, draft)}
                     className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
