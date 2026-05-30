@@ -95,3 +95,14 @@ CREDENTIALS.md
 # Private / client data in docs/
 docs/*.docx
 docs/build_*.py
+
+# Control plane symlinks (created by setup script)
+.windsurf/workflows/*.md
+.windsurf/skills/*/
+.windsurf/rules/*.md
+.cursor/commands/*.md
+.cursor/rules/*.md
+.cursor/skills/*/
+
+# MCP is global only (~/.cursor/mcp.json) — do not commit project mcp.json (D-053)
+.cursor/mcp.json
