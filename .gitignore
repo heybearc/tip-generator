@@ -101,8 +101,8 @@ docs/build_*.py
 .windsurf/skills/*/
 .windsurf/rules/*.md
 .cursor/commands/*.md
-.cursor/rules/*.md
-.cursor/skills/*/
+.cursor/rules/*
+.cursor/skills/*
 
 # MCP is global only (~/.cursor/mcp.json) — do not commit project mcp.json (D-053)
 .cursor/mcp.json
